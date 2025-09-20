@@ -23,10 +23,9 @@ def setup_scheduler():
 
     # Schedule system stats every 5 minutes
     scheduler.schedule(
-        scheduled_time=datetime.utcnow(),
+        datetime.utcnow(),
         func=log_system_stats,
         interval=300,  # 5 minutes
-        repeat=None,
         timeout=60,
         id='system-stats'
     )
@@ -34,10 +33,9 @@ def setup_scheduler():
 
     # Schedule heartbeat every 1 minute
     scheduler.schedule(
-        scheduled_time=datetime.utcnow(),
+        datetime.utcnow(),
         func=send_heartbeat,
         interval=60,  # 1 minute
-        repeat=None,
         timeout=30,
         id='heartbeat'
     )
@@ -45,10 +43,9 @@ def setup_scheduler():
 
     # Schedule cleanup every hour
     scheduler.schedule(
-        scheduled_time=datetime.utcnow(),
+        datetime.utcnow(),
         func=cleanup_old_logs,
         interval=3600,  # 1 hour
-        repeat=None,
         timeout=120,
         id='cleanup'
     )
