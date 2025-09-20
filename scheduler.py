@@ -58,7 +58,7 @@ def setup_scheduler():
     jobs = list(scheduler.get_jobs())
     logger.info(f"📋 Total scheduled jobs: {len(jobs)}")
     for job in jobs:
-        logger.info(f"   - {job.id}: {job.func_name} (next run: {job.next_run_time})")
+        logger.info(f"   - {job.id}: {job.func_name} (next run: {job.scheduled_time})")
 
     return scheduler
 
