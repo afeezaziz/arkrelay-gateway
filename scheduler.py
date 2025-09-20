@@ -27,8 +27,8 @@ def setup_scheduler():
         func=log_system_stats,
         interval=300,  # 5 minutes
         repeat=None,
-        job_id='system-stats',
-        job_timeout=60
+        timeout=60,
+        id='system-stats'
     )
     logger.info("✅ Scheduled system stats every 5 minutes")
 
@@ -38,8 +38,8 @@ def setup_scheduler():
         func=send_heartbeat,
         interval=60,  # 1 minute
         repeat=None,
-        job_id='heartbeat',
-        job_timeout=30
+        timeout=30,
+        id='heartbeat'
     )
     logger.info("✅ Scheduled heartbeat every 1 minute")
 
@@ -49,8 +49,8 @@ def setup_scheduler():
         func=cleanup_old_logs,
         interval=3600,  # 1 hour
         repeat=None,
-        job_id='cleanup',
-        job_timeout=120
+        timeout=120,
+        id='cleanup'
     )
     logger.info("✅ Scheduled cleanup every hour")
 
