@@ -58,7 +58,11 @@ def setup_scheduler():
     jobs = list(scheduler.get_jobs())
     logger.info(f"📋 Total scheduled jobs: {len(jobs)}")
     for job in jobs:
-        logger.info(f"   - {job.id}: {job.func_name} (next run: {job.scheduled_time})")
+        # Debug: print available job attributes
+        logger.info(f"   - {job.id}: {job.func_name} (attrs: {dir(job)})")
+        # Try to find the correct scheduled time attribute
+        scheduled_time = getattr(job, 'scheduled_time', None) or getattr(job, 'enqueue_at', None) or getattr(job, 'created_at', None)
+        logger.info(f"   - {job.id}: {job.func_name} (next run: {scheduled_time})")
 
     return scheduler
 
