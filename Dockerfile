@@ -15,14 +15,14 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy and install dependencies
-COPY gateway/pyproject.toml ./
+COPY pyproject.toml ./
 
 # Install uv and dependencies
 RUN pip install uv && \
     uv pip install --system -r pyproject.toml --no-dev
 
 # Copy the rest of your application code
-COPY gateway/ .
+COPY . .
 
 RUN adduser --disabled-password --gecos '' appuser && \
     chown -R appuser:appuser /usr/src/app
