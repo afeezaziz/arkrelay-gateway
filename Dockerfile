@@ -14,12 +14,14 @@ RUN apt-get update && apt-get install -y \
     default-libmysqlclient-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy requirements first for better caching
+COPY requirements.txt ./
+
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
 # Copy the rest of your application code
 COPY . .
-
-# Install uv and dependencies
-RUN pip install uv && \
-    uv pip install --system . --no-dev
 
 RUN adduser --disabled-password --gecos '' appuser && \
     chown -R appuser:appuser /usr/src/app
