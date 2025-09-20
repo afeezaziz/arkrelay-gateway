@@ -29,4 +29,4 @@ USER appuser
 
 EXPOSE 8000
 
-CMD ["python", "-m", "gunicorn", "main:app", "--bind", "0.0.0.0:8000", "--workers", "4"]
+CMD ["python", "-m", "gunicorn", "app:app", "--bind", "0.0.0.0:8000", "--workers", "4"]

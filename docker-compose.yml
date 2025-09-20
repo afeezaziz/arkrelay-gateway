@@ -10,8 +10,8 @@ services:
       - DATABASE_URL=mysql+pymysql://user:password@mariadb:3306/arkrelay
       - REDIS_URL=redis://redis:6379/0
     volumes:
-      - ./gateway:/usr/src/app
-    command: python -m gunicorn main:app --bind 0.0.0.0:8000 --workers 4
+      - .:/usr/src/app
+    command: python -m gunicorn app:app --bind 0.0.0.0:8000 --workers 4
     restart: unless-stopped
     depends_on:
       - redis
@@ -24,8 +24,8 @@ services:
       - DATABASE_URL=mysql+pymysql://user:password@mariadb:3306/arkrelay
       - REDIS_URL=redis://redis:6379/0
     volumes:
-      - ./gateway:/usr/src/app
-    command: python -m rq worker --url redis://redis:6379/0
+      - .:/usr/src/app
+    command: rq worker --url redis://redis:6379/0
     restart: unless-stopped
     depends_on:
       - redis
@@ -38,7 +38,7 @@ services:
       - DATABASE_URL=mysql+pymysql://user:password@mariadb:3306/arkrelay
       - REDIS_URL=redis://redis:6379/0
     volumes:
-      - ./gateway:/usr/src/app
+      - .:/usr/src/app
     command: python scheduler.py
     restart: unless-stopped
     depends_on:
