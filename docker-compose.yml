@@ -3,71 +3,24 @@ version: '3.8'
 services:
   web:
     build: .
-    ports:
-      - "8000:8000"
     environment:
       - SERVICE_TYPE=web
-      - DATABASE_URL=mysql+pymysql://user:password@mariadb:3306/arkrelay
-      - REDIS_URL=redis://redis:6379/0
-    volumes:
-      - .:/usr/src/app
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
     command: python -m gunicorn app:app --bind 0.0.0.0:8000 --workers 4
-    restart: unless-stopped
-    depends_on:
-      - redis
-      - mariadb
 
   worker:
     build: .
     environment:
       - SERVICE_TYPE=worker
-      - DATABASE_URL=mysql+pymysql://user:password@mariadb:3306/arkrelay
-      - REDIS_URL=redis://redis:6379/0
-    volumes:
-      - .:/usr/src/app
-    command: rq worker --url redis://redis:6379/0
-    restart: unless-stopped
-    depends_on:
-      - redis
-      - mariadb
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+    command: rq worker --url ${REDIS_URL}
 
   scheduler:
     build: .
     environment:
       - SERVICE_TYPE=scheduler
-      - DATABASE_URL=mysql+pymysql://user:password@mariadb:3306/arkrelay
-      - REDIS_URL=redis://redis:6379/0
-    volumes:
-      - .:/usr/src/app
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
     command: python scheduler.py
-    restart: unless-stopped
-    depends_on:
-      - redis
-      - worker
-      - mariadb
-
-  mariadb:
-    image: mariadb:10.11
-    environment:
-      - MYSQL_ROOT_PASSWORD=rootpassword
-      - MYSQL_DATABASE=arkrelay
-      - MYSQL_USER=user
-      - MYSQL_PASSWORD=password
-    ports:
-      - "3306:3306"
-    restart: unless-stopped
-    volumes:
-      - mariadb_data:/var/lib/mysql
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-
-volumes:
-  mariadb_data:
-  redis_data:
