@@ -3,6 +3,7 @@ from rq_scheduler import Scheduler
 from datetime import datetime
 import time
 import logging
+import os
 from tasks import log_system_stats, send_heartbeat, cleanup_old_logs
 
 logging.basicConfig(level=logging.INFO)
@@ -11,7 +12,9 @@ logger = logging.getLogger(__name__)
 def setup_scheduler():
     """Setup and configure the scheduler with periodic tasks"""
 
-    redis_conn = Redis(host='redis', port=6379, db=0)
+    # Use REDIS_URL environment variable or fallback to default
+    redis_url = os.getenv('REDIS_URL', 'redis://redis:6379/0')
+    redis_conn = Redis.from_url(redis_url)
     scheduler = Scheduler(connection=redis_conn, queue_name='default')
 
     # Clear existing scheduled jobs to avoid duplicates
