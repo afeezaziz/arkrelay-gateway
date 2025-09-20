@@ -1,6 +1,8 @@
 # Use an official Python runtime as a parent image
 FROM python:3.11-slim
 
+# Force rebuild - scheduler fixes
+
 # Set the working directory in the container
 WORKDIR /usr/src/app
 
@@ -23,8 +25,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of your application code
 COPY . .
 
+# Create user and set permissions
 RUN adduser --disabled-password --gecos '' appuser && \
     chown -R appuser:appuser /usr/src/app
+
+# Switch to non-root user
 USER appuser
 
 EXPOSE 8000
