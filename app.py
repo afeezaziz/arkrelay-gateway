@@ -13,6 +13,9 @@ from nostr_clients.nostr_redis import get_redis_manager, initialize_redis_manage
 from nostr_clients.nostr_workers import get_action_intent_worker, get_signing_response_worker
 from session_manager import get_session_manager
 from challenge_manager import get_challenge_manager
+from transaction_processor import get_transaction_processor
+from signing_orchestrator import get_signing_orchestrator
+from asset_manager import get_asset_manager
 
 app = Flask(__name__)
 
@@ -958,6 +961,372 @@ def get_nostr_sessions():
         return jsonify({'error': str(e)}), 500
     finally:
         session.close()
+
+# Phase 5: Core Business Logic Endpoints
+
+@app.route('/transactions/p2p-transfer', methods=['POST'])
+def process_p2p_transfer():
+    """Process a P2P transfer transaction"""
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+
+        if not session_id:
+            return jsonify({'error': 'session_id is required'}), 400
+
+        transaction_processor = get_transaction_processor()
+        result = transaction_processor.process_p2p_transfer(session_id)
+
+        return jsonify({
+            'message': 'P2P transfer processed successfully',
+            'transaction': result,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/transactions/<txid>/status')
+def get_transaction_status(txid):
+    """Get the status of a transaction"""
+    try:
+        transaction_processor = get_transaction_processor()
+        status = transaction_processor.get_transaction_status(txid)
+
+        if 'error' in status:
+            return jsonify(status), 404
+
+        return jsonify(status)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/transactions/<txid>/broadcast', methods=['POST'])
+def broadcast_transaction(txid):
+    """Broadcast a transaction to the network"""
+    try:
+        transaction_processor = get_transaction_processor()
+        result = transaction_processor.broadcast_transaction(txid)
+
+        return jsonify({
+            'success': result,
+            'txid': txid,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/transactions/user/<user_pubkey>')
+def get_user_transactions(user_pubkey):
+    """Get transactions for a specific user"""
+    try:
+        limit = request.args.get('limit', 50, type=int)
+        transaction_processor = get_transaction_processor()
+        transactions = transaction_processor.get_user_transactions(user_pubkey, limit)
+
+        return jsonify({
+            'transactions': transactions,
+            'user_pubkey': user_pubkey[:8] + '...',
+            'total_count': len(transactions),
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/signing/ceremony/start', methods=['POST'])
+def start_signing_ceremony():
+    """Start a signing ceremony for a session"""
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+
+        if not session_id:
+            return jsonify({'error': 'session_id is required'}), 400
+
+        orchestrator = get_signing_orchestrator()
+        result = orchestrator.start_signing_ceremony(session_id)
+
+        return jsonify({
+            'message': 'Signing ceremony started',
+            'ceremony': result,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/signing/ceremony/<session_id>/status')
+def get_signing_ceremony_status(session_id):
+    """Get the status of a signing ceremony"""
+    try:
+        orchestrator = get_signing_orchestrator()
+        status = orchestrator.get_ceremony_status(session_id)
+
+        return jsonify(status)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/signing/ceremony/<session_id>/step/<int:step>', methods=['POST'])
+def execute_signing_step(session_id, step):
+    """Execute a specific signing ceremony step"""
+    try:
+        data = request.get_json() or {}
+        signature_data = data.get('signature_data')
+
+        orchestrator = get_signing_orchestrator()
+        from signing_orchestrator import SigningStep
+        step_enum = SigningStep(step)
+
+        result = orchestrator.execute_signing_step(session_id, step_enum, signature_data)
+
+        return jsonify({
+            'step': step,
+            'result': result,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except ValueError as e:
+        return jsonify({'error': f'Invalid step: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/signing/ceremony/<session_id>/cancel', methods=['POST'])
+def cancel_signing_ceremony(session_id):
+    """Cancel a signing ceremony"""
+    try:
+        data = request.get_json() or {}
+        reason = data.get('reason', 'User cancelled')
+
+        orchestrator = get_signing_orchestrator()
+        result = orchestrator.cancel_ceremony(session_id, reason)
+
+        return jsonify({
+            'success': result,
+            'session_id': session_id,
+            'reason': reason,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/assets', methods=['POST'])
+def create_asset():
+    """Create a new asset"""
+    try:
+        data = request.get_json()
+        required_fields = ['asset_id', 'name', 'ticker']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'{field} is required'}), 400
+
+        asset_manager = get_asset_manager()
+        result = asset_manager.create_asset(
+            asset_id=data['asset_id'],
+            name=data['name'],
+            ticker=data['ticker'],
+            asset_type=data.get('asset_type', 'normal'),
+            decimal_places=data.get('decimal_places', 8),
+            total_supply=data.get('total_supply', 0),
+            metadata=data.get('metadata')
+        )
+
+        return jsonify({
+            'message': 'Asset created successfully',
+            'asset': result,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/assets/<asset_id>')
+def get_asset_info(asset_id):
+    """Get information about an asset"""
+    try:
+        asset_manager = get_asset_manager()
+        info = asset_manager.get_asset_info(asset_id)
+
+        if 'error' in info:
+            return jsonify(info), 404
+
+        return jsonify(info)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/assets')
+def list_assets():
+    """List all assets"""
+    try:
+        active_only = request.args.get('active_only', 'true').lower() == 'true'
+        asset_manager = get_asset_manager()
+        assets = asset_manager.list_assets(active_only)
+
+        return jsonify({
+            'assets': assets,
+            'total_count': len(assets),
+            'active_only': active_only,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/assets/<asset_id>/mint', methods=['POST'])
+def mint_assets():
+    """Mint new assets to a user"""
+    try:
+        data = request.get_json()
+        required_fields = ['user_pubkey', 'amount']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'{field} is required'}), 400
+
+        asset_manager = get_asset_manager()
+        result = asset_manager.mint_assets(
+            user_pubkey=data['user_pubkey'],
+            asset_id=asset_id,
+            amount=data['amount'],
+            reserve_amount=data.get('reserve_amount', 0)
+        )
+
+        return jsonify({
+            'message': 'Assets minted successfully',
+            'result': result,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/assets/transfer', methods=['POST'])
+def transfer_assets():
+    """Transfer assets between users"""
+    try:
+        data = request.get_json()
+        required_fields = ['sender_pubkey', 'recipient_pubkey', 'asset_id', 'amount']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'{field} is required'}), 400
+
+        asset_manager = get_asset_manager()
+        result = asset_manager.transfer_assets(
+            sender_pubkey=data['sender_pubkey'],
+            recipient_pubkey=data['recipient_pubkey'],
+            asset_id=data['asset_id'],
+            amount=data['amount']
+        )
+
+        return jsonify({
+            'message': 'Assets transferred successfully',
+            'result': result,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/balances/<user_pubkey>')
+def get_user_balances(user_pubkey):
+    """Get all balances for a user"""
+    try:
+        asset_manager = get_asset_manager()
+        balances = asset_manager.get_user_balances(user_pubkey)
+
+        return jsonify({
+            'balances': balances,
+            'user_pubkey': user_pubkey[:8] + '...',
+            'total_assets': len(balances),
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/balances/<user_pubkey>/<asset_id>')
+def get_user_balance(user_pubkey, asset_id):
+    """Get user's balance for a specific asset"""
+    try:
+        asset_manager = get_asset_manager()
+        balance = asset_manager.get_user_balance(user_pubkey, asset_id)
+
+        return jsonify(balance)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/vtxos/<user_pubkey>')
+def manage_vtxos(user_pubkey):
+    """Manage VTXOs for a user"""
+    try:
+        asset_id = request.args.get('asset_id')
+        action = request.args.get('action', 'list')
+
+        asset_manager = get_asset_manager()
+        result = asset_manager.manage_vtxos(
+            user_pubkey=user_pubkey,
+            asset_id=asset_id,
+            action=action
+        )
+
+        return jsonify({
+            'vtxo_management': result,
+            'user_pubkey': user_pubkey[:8] + '...',
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/assets/stats')
+def get_asset_stats():
+    """Get overall asset statistics"""
+    try:
+        asset_manager = get_asset_manager()
+        stats = asset_manager.get_asset_stats()
+
+        return jsonify({
+            'stats': stats,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/assets/cleanup-vtxos', methods=['POST'])
+def cleanup_expired_vtxos():
+    """Clean up expired VTXOs"""
+    try:
+        asset_manager = get_asset_manager()
+        result = asset_manager.cleanup_expired_vtxos()
+
+        return jsonify({
+            'message': 'VTXO cleanup completed',
+            'result': result,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/assets/<asset_id>/reserve')
+def get_reserve_requirements(asset_id):
+    """Get reserve requirements for an asset"""
+    try:
+        asset_manager = get_asset_manager()
+        reserve = asset_manager.get_reserve_requirements(asset_id)
+
+        return jsonify({
+            'reserve_requirements': reserve,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 def initialize_services():
     """Initialize all services when the app starts"""

@@ -32,6 +32,23 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('asset_id')
     )
+    op.create_table('signing_sessions',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('session_id', sa.String(length=64), nullable=False),
+    sa.Column('user_pubkey', sa.String(length=66), nullable=False),
+    sa.Column('session_type', sa.String(length=20), nullable=False),
+    sa.Column('status', sa.String(length=20), nullable=True),
+    sa.Column('intent_data', mysql.JSON(), nullable=False),
+    sa.Column('context', sa.Text(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
+    sa.Column('updated_at', sa.DateTime(), nullable=True),
+    sa.Column('expires_at', sa.DateTime(), nullable=False),
+    sa.Column('signed_tx', sa.Text(), nullable=True),
+    sa.Column('result_data', mysql.JSON(), nullable=True),
+    sa.Column('error_message', sa.Text(), nullable=True),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('session_id')
+    )
     op.create_table('signing_challenges',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('challenge_id', sa.String(length=64), nullable=False),
@@ -42,28 +59,9 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.Column('is_used', sa.Boolean(), nullable=True),
     sa.Column('signature', sa.LargeBinary(), nullable=True),
-    sa.ForeignKeyConstraint(['session_id'], ['signing_sessions.id'], ),
+    sa.ForeignKeyConstraint(['session_id'], ['signing_sessions.session_id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('challenge_id')
-    )
-    op.create_table('signing_sessions',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('session_id', sa.String(length=64), nullable=False),
-    sa.Column('user_pubkey', sa.String(length=66), nullable=False),
-    sa.Column('session_type', sa.String(length=20), nullable=False),
-    sa.Column('status', sa.String(length=20), nullable=True),
-    sa.Column('challenge_id', sa.String(length=64), nullable=True),
-    sa.Column('intent_data', mysql.JSON(), nullable=False),
-    sa.Column('context', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(), nullable=True),
-    sa.Column('updated_at', sa.DateTime(), nullable=True),
-    sa.Column('expires_at', sa.DateTime(), nullable=False),
-    sa.Column('signed_tx', sa.Text(), nullable=True),
-    sa.Column('result_data', mysql.JSON(), nullable=True),
-    sa.Column('error_message', sa.Text(), nullable=True),
-    sa.ForeignKeyConstraint(['challenge_id'], ['signing_challenges.id'], ),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('session_id')
     )
     op.create_table('asset_balances',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -72,7 +70,7 @@ def upgrade() -> None:
     sa.Column('balance', sa.BigInteger(), nullable=True),
     sa.Column('reserved_balance', sa.BigInteger(), nullable=True),
     sa.Column('last_updated', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['asset_id'], ['assets.id'], ),
+    sa.ForeignKeyConstraint(['asset_id'], ['assets.asset_id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('lightning_invoices',
@@ -88,8 +86,8 @@ def upgrade() -> None:
     sa.Column('expires_at', sa.DateTime(), nullable=False),
     sa.Column('paid_at', sa.DateTime(), nullable=True),
     sa.Column('preimage', sa.String(length=64), nullable=True),
-    sa.ForeignKeyConstraint(['asset_id'], ['assets.id'], ),
-    sa.ForeignKeyConstraint(['session_id'], ['signing_sessions.id'], ),
+    sa.ForeignKeyConstraint(['asset_id'], ['assets.asset_id'], ),
+    sa.ForeignKeyConstraint(['session_id'], ['signing_sessions.session_id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('payment_hash')
     )
@@ -105,7 +103,7 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.Column('confirmed_at', sa.DateTime(), nullable=True),
     sa.Column('block_height', sa.Integer(), nullable=True),
-    sa.ForeignKeyConstraint(['session_id'], ['signing_sessions.id'], ),
+    sa.ForeignKeyConstraint(['session_id'], ['signing_sessions.session_id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('txid')
     )
@@ -122,7 +120,7 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.Column('expires_at', sa.DateTime(), nullable=False),
     sa.Column('spending_txid', sa.String(length=64), nullable=True),
-    sa.ForeignKeyConstraint(['asset_id'], ['assets.id'], ),
+    sa.ForeignKeyConstraint(['asset_id'], ['assets.asset_id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('vtxo_id')
     )

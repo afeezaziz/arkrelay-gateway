@@ -13,9 +13,6 @@ services:
       - LOG_LEVEL=${LOG_LEVEL}
     ports:
       - "8000:8000"
-    depends_on:
-      - mariadb
-      - redis
     volumes:
       - ./logs:/app/logs
     command: python -m gunicorn app:app --bind 0.0.0.0:8000 --workers 4
@@ -29,9 +26,6 @@ services:
       - FLASK_ENV=${FLASK_ENV}
       - SECRET_KEY=${SECRET_KEY}
       - LOG_LEVEL=${LOG_LEVEL}
-    depends_on:
-      - mariadb
-      - redis
     volumes:
       - ./logs:/app/logs
     command: rq worker --url ${REDIS_URL}
@@ -45,32 +39,6 @@ services:
       - FLASK_ENV=${FLASK_ENV}
       - SECRET_KEY=${SECRET_KEY}
       - LOG_LEVEL=${LOG_LEVEL}
-    depends_on:
-      - mariadb
-      - redis
     volumes:
       - ./logs:/app/logs
     command: python scheduler.py
-
-  mariadb:
-    image: mariadb:10.11
-    environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_DATABASE=${MYSQL_DATABASE}
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-    ports:
-      - "3306:3306"
-    volumes:
-      - mariadb_data:/var/lib/mysql
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-
-volumes:
-  mariadb_data:
-  redis_data:

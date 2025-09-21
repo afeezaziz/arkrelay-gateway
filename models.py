@@ -52,7 +52,7 @@ class Vtxo(Base):
     vout = Column(Integer, nullable=False)
     amount_sats = Column(BigInteger, nullable=False)
     script_pubkey = Column(LargeBinary, nullable=False)
-    asset_id = Column(String(64), ForeignKey('assets.id'))
+    asset_id = Column(String(64), ForeignKey('assets.asset_id'))
     user_pubkey = Column(String(66), nullable=False)
     status = Column(String(20), default='available')  # available, assigned, spent, expired
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -83,7 +83,7 @@ class AssetBalance(Base):
 
     id = Column(Integer, primary_key=True)
     user_pubkey = Column(String(66), nullable=False)
-    asset_id = Column(String(64), ForeignKey('assets.id'), nullable=False)
+    asset_id = Column(String(64), ForeignKey('assets.asset_id'), nullable=False)
     balance = Column(BigInteger, default=0)
     reserved_balance = Column(BigInteger, default=0)
     last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -102,7 +102,6 @@ class SigningSession(Base):
     user_pubkey = Column(String(66), nullable=False)
     session_type = Column(String(20), nullable=False)  # p2p_transfer, lightning_lift, lightning_land
     status = Column(String(20), default='initiated')  # initiated, challenge_sent, waiting_response, signing, completed, failed, expired
-    challenge_id = Column(String(64), ForeignKey('signing_challenges.id'))
     intent_data = Column(JSON, nullable=False)  # Original intent data
     context = Column(Text, nullable=True)  # Human-readable context
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -111,8 +110,6 @@ class SigningSession(Base):
     signed_tx = Column(Text, nullable=True)  # Hex-encoded signed transaction
     result_data = Column(JSON, nullable=True)  # Final transaction details
     error_message = Column(Text, nullable=True)
-
-    challenge = relationship("SigningChallenge", back_populates="session")
 
 class SigningChallenge(Base):
     __tablename__ = 'signing_challenges'
@@ -127,14 +124,14 @@ class SigningChallenge(Base):
     is_used = Column(Boolean, default=False)
     signature = Column(LargeBinary, nullable=True)  # User's signature response
 
-    session = relationship("SigningSession", back_populates="challenge")
+    session = relationship("SigningSession", foreign_keys=[session_id])
 
 class Transaction(Base):
     __tablename__ = 'transactions'
 
     id = Column(Integer, primary_key=True)
     txid = Column(String(64), unique=True, nullable=False)
-    session_id = Column(String(64), ForeignKey('signing_sessions.id'))
+    session_id = Column(String(64), ForeignKey('signing_sessions.session_id'))
     tx_type = Column(String(20), nullable=False)  # ark_tx, checkpoint_tx, settlement_tx
     raw_tx = Column(Text, nullable=False)  # Hex-encoded transaction
     status = Column(String(20), default='pending')  # pending, broadcast, confirmed, failed
@@ -152,7 +149,7 @@ class LightningInvoice(Base):
     id = Column(Integer, primary_key=True)
     payment_hash = Column(String(64), unique=True, nullable=False)
     bolt11_invoice = Column(Text, nullable=False)
-    session_id = Column(String(64), ForeignKey('signing_sessions.id'))
+    session_id = Column(String(64), ForeignKey('signing_sessions.session_id'))
     amount_sats = Column(BigInteger, nullable=False)
     asset_id = Column(String(64), ForeignKey('assets.id'), nullable=True)
     status = Column(String(20), default='pending')  # pending, paid, expired, cancelled

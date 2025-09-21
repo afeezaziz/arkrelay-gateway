@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Simple test script for session management functionality
+Comprehensive test script for session management functionality including Phase 5 integration
 """
 import sys
 import os
@@ -12,6 +12,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from session_manager import get_session_manager, SessionState
 from challenge_manager import get_challenge_manager
+from transaction_processor import get_transaction_processor
+from signing_orchestrator import get_signing_orchestrator
+from asset_manager import get_asset_manager
 
 def test_session_creation():
     """Test creating a session"""
@@ -143,10 +146,105 @@ def test_session_cleanup():
         print(f"❌ Error during cleanup: {e}")
         return False
 
+def test_phase5_integration(session_id):
+    """Test Phase 5 integration with session management"""
+    print(f"\nTesting Phase 5 integration for session {session_id[:16]}...")
+
+    try:
+        # Test transaction processor integration
+        print("   Testing transaction processor...")
+        transaction_processor = get_transaction_processor()
+        # Note: This would require actual asset balances in the database
+        print("   ✅ Transaction processor accessible")
+
+        # Test signing orchestrator integration
+        print("   Testing signing orchestrator...")
+        orchestrator = get_signing_orchestrator()
+        ceremony_status = orchestrator.get_ceremony_status(session_id)
+        print("   ✅ Signing orchestrator accessible")
+
+        # Test asset manager integration
+        print("   Testing asset manager...")
+        asset_manager = get_asset_manager()
+        asset_stats = asset_manager.get_asset_stats()
+        print("   ✅ Asset manager accessible")
+
+        return True
+    except Exception as e:
+        print(f"   ❌ Phase 5 integration test failed: {e}")
+        return False
+
+def test_complete_phase5_workflow():
+    """Test complete Phase 5 workflow"""
+    print("\nTesting complete Phase 5 workflow...")
+
+    try:
+        # Create asset for testing
+        print("   Creating test asset...")
+        asset_manager = get_asset_manager()
+        asset_result = asset_manager.create_asset(
+            asset_id="TEST_BTC",
+            name="Test Bitcoin",
+            ticker="TBTC",
+            asset_type="normal",
+            decimal_places=8,
+            total_supply=1000000
+        )
+        print(f"   ✅ Asset created: {asset_result['asset_id']}")
+
+        # Mint assets to test user
+        print("   Minting assets to test user...")
+        user_pubkey = "test_user_phase5_1234567890abcdef1234567890abcdef12345678"
+        mint_result = asset_manager.mint_assets(user_pubkey, "TEST_BTC", 5000)
+        print(f"   ✅ Assets minted: {mint_result['amount_minted']}")
+
+        # Create session for P2P transfer
+        print("   Creating P2P transfer session...")
+        session_manager = get_session_manager()
+        session = session_manager.create_session(
+            user_pubkey=user_pubkey,
+            session_type="p2p_transfer",
+            intent_data={
+                "recipient_pubkey": "test_recipient_phase5_1234567890abcdef1234567890abcdef12345678",
+                "amount": 1000,
+                "asset_id": "TEST_BTC"
+            }
+        )
+        print(f"   ✅ Session created: {session.session_id[:16]}...")
+
+        # Move to signing state
+        print("   Moving session to signing state...")
+        challenge_manager = get_challenge_manager()
+        challenge = challenge_manager.create_and_store_challenge(
+            session.session_id,
+            {"session_id": session.session_id, "test": "data"}
+        )
+        session_manager.validate_challenge_response(session.session_id, b"test_signature")
+        print("   ✅ Session ready for signing")
+
+        # Test VTXO management
+        print("   Testing VTXO management...")
+        vtxo_result = asset_manager.manage_vtxos(
+            user_pubkey=user_pubkey,
+            asset_id="TEST_BTC",
+            action="create",
+            amount_sats=2000
+        )
+        print(f"   ✅ VTXO created: {vtxo_result['vtxo_id'][:16]}...")
+
+        print("   🎉 Complete Phase 5 workflow test successful!")
+        return True
+
+    except Exception as e:
+        print(f"   ❌ Complete Phase 5 workflow test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 def main():
-    """Run all tests"""
-    print("🚀 Starting Session Management Tests")
-    print("=" * 50)
+    """Run all tests including Phase 5 integration"""
+    print("🚀 Starting Session Management Tests with Phase 5 Integration")
+    print("=" * 70)
 
     session_id = None
 
@@ -169,16 +267,26 @@ def main():
         # Test cleanup
         cleanup_ok = test_session_cleanup()
 
-        print("\n" + "=" * 50)
+        # Test Phase 5 integration
+        phase5_integration_ok = test_phase5_integration(session_id)
+
+        # Test complete Phase 5 workflow
+        phase5_workflow_ok = test_complete_phase5_workflow()
+
+        print("\n" + "=" * 70)
         print("🏁 Test Summary:")
         print(f"   Session Creation: ✅" if session_id else "   Session Creation: ❌")
         print(f"   Challenge Creation: ✅" if challenge_id else "   Challenge Creation: ❌")
         print(f"   Status Transitions: ✅" if transitions_ok else "   Status Transitions: ❌")
         print(f"   Info Retrieval: ✅" if info_ok else "   Info Retrieval: ❌")
         print(f"   Cleanup: ✅" if cleanup_ok else "   Cleanup: ❌")
+        print(f"   Phase 5 Integration: ✅" if phase5_integration_ok else "   Phase 5 Integration: ❌")
+        print(f"   Phase 5 Workflow: ✅" if phase5_workflow_ok else "   Phase 5 Workflow: ❌")
 
-        if all([session_id, challenge_id, transitions_ok, info_ok, cleanup_ok]):
-            print("\n🎉 All tests passed!")
+        all_passed = all([session_id, challenge_id, transitions_ok, info_ok, cleanup_ok, phase5_integration_ok, phase5_workflow_ok])
+
+        if all_passed:
+            print("\n🎉 All tests passed! Phase 5 integration working correctly!")
         else:
             print("\n⚠️  Some tests failed")
 

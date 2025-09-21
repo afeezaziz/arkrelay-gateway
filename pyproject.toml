@@ -23,4 +23,6 @@ dependencies = [
     "ecdsa>=0.19.0",
     "base58>=2.1.1",
     "bech32>=1.2.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
 ]
