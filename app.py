@@ -9,8 +9,10 @@ from models import JobLog, SystemMetrics, Heartbeat, get_session
 
 app = Flask(__name__)
 
-redis_conn = Redis(host='redis', port=6379, db=0)
-q = Queue(connection=redis_conn)
+# Use REDIS_URL environment variable or fallback to default
+redis_url = os.getenv('REDIS_URL', 'redis://redis:6379/0')
+redis_conn = Redis.from_url(redis_url)
+q = Queue(connection=redis_conn, default_result_ttl=3600)  # 1 hour default for jobs without explicit TTL
 scheduler = Scheduler(connection=redis_conn, queue_name='default')
 
 @app.route('/')
@@ -54,7 +56,7 @@ def queue_status():
 
 @app.route('/enqueue-demo')
 def enqueue_demo():
-    job = q.enqueue('tasks.sample_task', args=['Demo job from web'], job_timeout=60)
+    job = q.enqueue('tasks.sample_task', args=['Demo job from web'], job_timeout=60, result_ttl=3600)
     return jsonify({
         'message': 'Job enqueued',
         'job_id': job.id,
@@ -73,7 +75,8 @@ def enqueue_user_process():
         'tasks.process_user_data',
         args=[user_id, action_type, user_data],
         job_timeout=120,
-        job_id=f"user_{user_id}_{action_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        job_id=f"user_{user_id}_{action_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        result_ttl=7200  # Store user job results for 2 hours
     )
 
     return jsonify({

@@ -1,8 +1,10 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Float, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Float, Boolean, ForeignKey, BigInteger, LargeBinary
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.dialects.mysql import JSON
 from datetime import datetime
 import os
+from config import Config
 
 Base = declarative_base()
 
@@ -39,9 +41,132 @@ class Heartbeat(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
     message = Column(String(200))
 
+# Ark Relay Models
+
+class Vtxo(Base):
+    __tablename__ = 'vtxos'
+
+    id = Column(Integer, primary_key=True)
+    vtxo_id = Column(String(64), unique=True, nullable=False)
+    txid = Column(String(64), nullable=False)
+    vout = Column(Integer, nullable=False)
+    amount_sats = Column(BigInteger, nullable=False)
+    script_pubkey = Column(LargeBinary, nullable=False)
+    asset_id = Column(String(64), ForeignKey('assets.id'))
+    user_pubkey = Column(String(66), nullable=False)
+    status = Column(String(20), default='available')  # available, assigned, spent, expired
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    spending_txid = Column(String(64), nullable=True)
+
+    asset = relationship("Asset", back_populates="vtxos")
+
+class Asset(Base):
+    __tablename__ = 'assets'
+
+    id = Column(Integer, primary_key=True)
+    asset_id = Column(String(64), unique=True, nullable=False)
+    name = Column(String(100), nullable=False)
+    ticker = Column(String(10), nullable=False)
+    asset_type = Column(String(20), default='normal')  # normal, collectible
+    decimal_places = Column(Integer, default=8)
+    total_supply = Column(BigInteger, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    asset_metadata = Column('metadata', JSON, nullable=True)  # Additional asset metadata
+
+    vtxos = relationship("Vtxo", back_populates="asset")
+    balances = relationship("AssetBalance", back_populates="asset")
+
+class AssetBalance(Base):
+    __tablename__ = 'asset_balances'
+
+    id = Column(Integer, primary_key=True)
+    user_pubkey = Column(String(66), nullable=False)
+    asset_id = Column(String(64), ForeignKey('assets.id'), nullable=False)
+    balance = Column(BigInteger, default=0)
+    reserved_balance = Column(BigInteger, default=0)
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    asset = relationship("Asset", back_populates="balances")
+
+    __table_args__ = (
+        {'extend_existing': True}
+    )
+
+class SigningSession(Base):
+    __tablename__ = 'signing_sessions'
+
+    id = Column(Integer, primary_key=True)
+    session_id = Column(String(64), unique=True, nullable=False)
+    user_pubkey = Column(String(66), nullable=False)
+    session_type = Column(String(20), nullable=False)  # p2p_transfer, lightning_lift, lightning_land
+    status = Column(String(20), default='initiated')  # initiated, challenge_sent, waiting_response, signing, completed, failed, expired
+    challenge_id = Column(String(64), ForeignKey('signing_challenges.id'))
+    intent_data = Column(JSON, nullable=False)  # Original intent data
+    context = Column(Text, nullable=True)  # Human-readable context
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    signed_tx = Column(Text, nullable=True)  # Hex-encoded signed transaction
+    result_data = Column(JSON, nullable=True)  # Final transaction details
+    error_message = Column(Text, nullable=True)
+
+    challenge = relationship("SigningChallenge", back_populates="session")
+
+class SigningChallenge(Base):
+    __tablename__ = 'signing_challenges'
+
+    id = Column(Integer, primary_key=True)
+    challenge_id = Column(String(64), unique=True, nullable=False)
+    session_id = Column(String(64), ForeignKey('signing_sessions.id'))
+    challenge_data = Column(LargeBinary, nullable=False)  # Binary challenge data
+    context = Column(Text, nullable=False)  # Human-readable context
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    is_used = Column(Boolean, default=False)
+    signature = Column(LargeBinary, nullable=True)  # User's signature response
+
+    session = relationship("SigningSession", back_populates="challenge")
+
+class Transaction(Base):
+    __tablename__ = 'transactions'
+
+    id = Column(Integer, primary_key=True)
+    txid = Column(String(64), unique=True, nullable=False)
+    session_id = Column(String(64), ForeignKey('signing_sessions.id'))
+    tx_type = Column(String(20), nullable=False)  # ark_tx, checkpoint_tx, settlement_tx
+    raw_tx = Column(Text, nullable=False)  # Hex-encoded transaction
+    status = Column(String(20), default='pending')  # pending, broadcast, confirmed, failed
+    amount_sats = Column(BigInteger, nullable=False)
+    fee_sats = Column(BigInteger, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    confirmed_at = Column(DateTime, nullable=True)
+    block_height = Column(Integer, nullable=True)
+
+    session = relationship("SigningSession")
+
+class LightningInvoice(Base):
+    __tablename__ = 'lightning_invoices'
+
+    id = Column(Integer, primary_key=True)
+    payment_hash = Column(String(64), unique=True, nullable=False)
+    bolt11_invoice = Column(Text, nullable=False)
+    session_id = Column(String(64), ForeignKey('signing_sessions.id'))
+    amount_sats = Column(BigInteger, nullable=False)
+    asset_id = Column(String(64), ForeignKey('assets.id'), nullable=True)
+    status = Column(String(20), default='pending')  # pending, paid, expired, cancelled
+    invoice_type = Column(String(10), nullable=False)  # lift, land
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    paid_at = Column(DateTime, nullable=True)
+    preimage = Column(String(64), nullable=True)
+
+    asset = relationship("Asset")
+
 # Database setup
 def get_database_url():
-    return os.getenv('DATABASE_URL', 'mysql+pymysql://user:password@mariadb:3306/arkrelay')
+    return Config.DATABASE_URL
 
 def create_tables():
     engine = create_engine(get_database_url())

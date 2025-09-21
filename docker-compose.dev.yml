@@ -7,10 +7,11 @@ services:
       - SERVICE_TYPE=web
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
-      - FLASK_ENV=${FLASK_ENV}
-      - FLASK_DEBUG=${FLASK_DEBUG}
-      - SECRET_KEY=${SECRET_KEY}
-      - LOG_LEVEL=${LOG_LEVEL}
+      - FLASK_ENV=development
+      - FLASK_DEBUG=true
+      - SECRET_KEY=dev-secret-key-only-for-testing
+      - LOG_LEVEL=DEBUG
+      - BITCOIN_NETWORK=regtest
     ports:
       - "8000:8000"
     depends_on:
@@ -18,7 +19,8 @@ services:
       - redis
     volumes:
       - ./logs:/app/logs
-    command: python -m gunicorn app:app --bind 0.0.0.0:8000 --workers 4
+      - .:/app
+    command: python -m gunicorn app:app --bind 0.0.0.0:8000 --workers 1 --reload
 
   worker:
     build: .
@@ -26,14 +28,15 @@ services:
       - SERVICE_TYPE=worker
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
-      - FLASK_ENV=${FLASK_ENV}
-      - SECRET_KEY=${SECRET_KEY}
-      - LOG_LEVEL=${LOG_LEVEL}
+      - FLASK_ENV=development
+      - SECRET_KEY=dev-secret-key-only-for-testing
+      - LOG_LEVEL=DEBUG
     depends_on:
       - mariadb
       - redis
     volumes:
       - ./logs:/app/logs
+      - .:/app
     command: rq worker --url ${REDIS_URL}
 
   scheduler:
@@ -42,23 +45,24 @@ services:
       - SERVICE_TYPE=scheduler
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
-      - FLASK_ENV=${FLASK_ENV}
-      - SECRET_KEY=${SECRET_KEY}
-      - LOG_LEVEL=${LOG_LEVEL}
+      - FLASK_ENV=development
+      - SECRET_KEY=dev-secret-key-only-for-testing
+      - LOG_LEVEL=DEBUG
     depends_on:
       - mariadb
       - redis
     volumes:
       - ./logs:/app/logs
+      - .:/app
     command: python scheduler.py
 
   mariadb:
     image: mariadb:10.11
     environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_DATABASE=${MYSQL_DATABASE}
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=arkrelay
+      - MYSQL_USER=user
+      - MYSQL_PASSWORD=password
     ports:
       - "3306:3306"
     volumes:

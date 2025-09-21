@@ -30,7 +30,8 @@ def setup_scheduler():
         func=log_system_stats,
         interval=300,  # 5 minutes
         timeout=60,
-        id='system-stats'
+        id='system-stats',
+        result_ttl=300  # Store results for 5 minutes
     )
     logger.info("✅ Scheduled system stats every 5 minutes")
 
@@ -40,7 +41,8 @@ def setup_scheduler():
         func=send_heartbeat,
         interval=60,  # 1 minute
         timeout=30,
-        id='heartbeat'
+        id='heartbeat',
+        result_ttl=0  # Don't store heartbeat results at all
     )
     logger.info("✅ Scheduled heartbeat every 1 minute")
 
@@ -50,7 +52,8 @@ def setup_scheduler():
         func=cleanup_old_logs,
         interval=3600,  # 1 hour
         timeout=120,
-        id='cleanup'
+        id='cleanup',
+        result_ttl=600  # Store results for 10 minutes
     )
     logger.info("✅ Scheduled cleanup every hour")
 

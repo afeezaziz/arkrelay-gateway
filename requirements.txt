@@ -2,39 +2,80 @@
 #    uv pip compile pyproject.toml -o requirements.txt
 alembic==1.16.5
     # via gateway (pyproject.toml)
+base58==2.1.1
+    # via gateway (pyproject.toml)
+bech32==1.2.0
+    # via gateway (pyproject.toml)
 blinker==1.9.0
     # via flask
+certifi==2025.8.3
+    # via requests
+cffi==2.0.0
+    # via cryptography
+charset-normalizer==3.4.3
+    # via requests
 click==8.3.0
     # via
     #   flask
     #   rq
+    #   typer
+coincurve==21.0.0
+    # via pynostr
 croniter==6.0.0
     # via rq
 crontab==1.0.5
     # via rq-scheduler
+cryptography==46.0.1
+    # via
+    #   gateway (pyproject.toml)
+    #   pynostr
+ecdsa==0.19.1
+    # via gateway (pyproject.toml)
 flask==3.1.2
     # via gateway (pyproject.toml)
 freezegun==1.5.5
     # via rq-scheduler
+grpcio==1.75.0
+    # via
+    #   gateway (pyproject.toml)
+    #   grpcio-tools
+grpcio-tools==1.75.0
+    # via gateway (pyproject.toml)
 gunicorn==23.0.0
     # via gateway (pyproject.toml)
+idna==3.10
+    # via requests
 itsdangerous==2.2.0
     # via flask
 jinja2==3.1.6
     # via flask
 mako==1.3.10
     # via alembic
+markdown-it-py==4.0.0
+    # via rich
 markupsafe==3.0.2
     # via
     #   flask
     #   jinja2
     #   mako
     #   werkzeug
+mdurl==0.1.2
+    # via markdown-it-py
 packaging==25.0
     # via gunicorn
+protobuf==6.32.1
+    # via
+    #   gateway (pyproject.toml)
+    #   grpcio-tools
 psutil==7.1.0
     # via gateway (pyproject.toml)
+pycparser==2.23
+    # via cffi
+pygments==2.19.2
+    # via rich
 pymysql==1.1.2
+    # via gateway (pyproject.toml)
+pynostr==0.7.0
     # via gateway (pyproject.toml)
 python-dateutil==2.9.0.post0
     # via
@@ -49,21 +90,43 @@ redis==6.4.0
     # via
     #   gateway (pyproject.toml)
     #   rq
+requests==2.32.5
+    # via pynostr
+rich==14.1.0
+    # via
+    #   pynostr
+    #   typer
 rq==2.6.0
     # via
     #   gateway (pyproject.toml)
     #   rq-scheduler
 rq-scheduler==0.14.0
     # via gateway (pyproject.toml)
+setuptools==80.9.0
+    # via grpcio-tools
+shellingham==1.5.4
+    # via typer
 six==1.17.0
-    # via python-dateutil
+    # via
+    #   ecdsa
+    #   python-dateutil
 sqlalchemy==2.0.43
     # via
     #   gateway (pyproject.toml)
     #   alembic
+tlv8==0.10.0
+    # via pynostr
+tornado==6.5.2
+    # via pynostr
+typer==0.19.1
+    # via pynostr
 typing-extensions==4.15.0
     # via
     #   alembic
+    #   grpcio
     #   sqlalchemy
+    #   typer
+urllib3==2.5.0
+    # via requests
 werkzeug==3.1.3
     # via flask
