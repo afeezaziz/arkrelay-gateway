@@ -13,7 +13,7 @@ from unittest.mock import Mock, patch, MagicMock
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 
-from tests.test_config import configure_test_environment
+from core.config import Config
 
 
 class TestPerformance:
@@ -38,7 +38,7 @@ class TestPerformance:
         with patch('grpc_clients.arkd_client.ArkClient') as mock_arkd, \
              patch('grpc_clients.lnd_client.LndClient') as mock_lnd, \
              patch('grpc_clients.tapd_client.TapClient') as mock_tapd, \
-             patch('session_manager.SessionManager') as mock_session:
+             patch('core.session_manager.SessionManager') as mock_session:
 
             # Configure mock clients for fast responses
             arkd_client = Mock()
@@ -246,7 +246,7 @@ class TestPerformance:
     @pytest.mark.performance
     def test_database_query_performance(self, performance_config):
         """Test database query performance"""
-        with patch('models.get_session') as mock_db:
+        with patch('core.models.get_session') as mock_db:
             session = Mock()
             session.query.return_value.all.return_value = []
             session.add.return_value = None

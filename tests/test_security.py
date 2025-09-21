@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 import secrets
 import string
 
-from tests.test_config import configure_test_environment
+from core.config import Config
 
 
 class TestSecurityTesting:
@@ -38,8 +38,8 @@ class TestSecurityTesting:
         with patch('grpc_clients.arkd_client.ArkClient') as mock_arkd, \
              patch('grpc_clients.lnd_client.LndClient') as mock_lnd, \
              patch('grpc_clients.tapd_client.TapClient') as mock_tapd, \
-             patch('session_manager.SessionManager') as mock_session, \
-             patch('models.get_session') as mock_db, \
+             patch('core.session_manager.SessionManager') as mock_session, \
+             patch('core.models.get_session') as mock_db, \
              patch('nostr_clients.nostr_client.NostrClient') as mock_nostr:
 
             # Configure clients for security testing
