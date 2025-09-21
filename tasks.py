@@ -209,3 +209,63 @@ def process_user_data(user_id, action_type, data):
         raise
     finally:
         session.close()
+
+def cleanup_expired_sessions():
+    """Clean up expired signing sessions and challenges"""
+    job_id = str(uuid.uuid4())
+    session = get_session()
+
+    try:
+        # Log job start
+        job_log = JobLog(
+            job_id=job_id,
+            job_type='session_cleanup',
+            status='running',
+            message='Starting session cleanup'
+        )
+        session.add(job_log)
+        session.commit()
+
+        start_time = time.time()
+
+        # Import the managers
+        from session_manager import get_session_manager
+        from challenge_manager import get_challenge_manager
+
+        session_manager = get_session_manager()
+        challenge_manager = get_challenge_manager()
+
+        # Clean up expired sessions
+        expired_sessions = session_manager.cleanup_expired_sessions()
+
+        # Clean up expired challenges
+        expired_challenges = challenge_manager.cleanup_expired_challenges()
+
+        duration = time.time() - start_time
+
+        # Log completion
+        result = {
+            "status": "completed",
+            "expired_sessions_cleaned": expired_sessions,
+            "expired_challenges_cleaned": expired_challenges,
+            "total_cleaned": expired_sessions + expired_challenges,
+            "duration_seconds": duration,
+            "timestamp": datetime.now().isoformat()
+        }
+
+        job_log.status = 'completed'
+        job_log.result_data = json.dumps(result)
+        job_log.duration_seconds = duration
+        session.commit()
+
+        logger.info(f"✅ Session cleanup completed: {expired_sessions} sessions, {expired_challenges} challenges cleaned")
+        return result
+
+    except Exception as e:
+        logger.error(f"❌ Failed to cleanup sessions: {e}")
+        job_log.status = 'failed'
+        job_log.message = str(e)
+        session.commit()
+        raise
+    finally:
+        session.close()

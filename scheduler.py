@@ -4,7 +4,7 @@ from datetime import datetime
 import time
 import logging
 import os
-from tasks import log_system_stats, send_heartbeat, cleanup_old_logs
+from tasks import log_system_stats, send_heartbeat, cleanup_old_logs, cleanup_expired_sessions
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -21,6 +21,7 @@ def setup_scheduler():
     scheduler.cancel('system-stats')
     scheduler.cancel('heartbeat')
     scheduler.cancel('cleanup')
+    scheduler.cancel('session-cleanup')
 
     logger.info("🗓️  Setting up scheduled jobs...")
 
@@ -56,6 +57,17 @@ def setup_scheduler():
         result_ttl=600  # Store results for 10 minutes
     )
     logger.info("✅ Scheduled cleanup every hour")
+
+    # Schedule session cleanup every 5 minutes
+    scheduler.schedule(
+        datetime.utcnow(),
+        func=cleanup_expired_sessions,
+        interval=300,  # 5 minutes
+        timeout=60,
+        id='session-cleanup',
+        result_ttl=300  # Store results for 5 minutes
+    )
+    logger.info("✅ Scheduled session cleanup every 5 minutes")
 
     # List all scheduled jobs
     jobs = list(scheduler.get_jobs())

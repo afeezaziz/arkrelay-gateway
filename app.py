@@ -11,6 +11,8 @@ from nostr_clients.nostr_client import get_nostr_client, initialize_nostr_client
 from nostr_clients.nostr_handlers import get_event_handler, initialize_event_handler
 from nostr_clients.nostr_redis import get_redis_manager, initialize_redis_manager, shutdown_redis_manager
 from nostr_clients.nostr_workers import get_action_intent_worker, get_signing_response_worker
+from session_manager import get_session_manager
+from challenge_manager import get_challenge_manager
 
 app = Flask(__name__)
 
@@ -577,6 +579,349 @@ def test_encryption():
             'decryption_time_ms': round(decryption_time * 1000, 2),
             'timestamp': datetime.now().isoformat()
         })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Session Management Endpoints
+
+@app.route('/sessions/create', methods=['POST'])
+def create_session():
+    """Create a new signing session"""
+    try:
+        data = request.get_json()
+        user_pubkey = data.get('user_pubkey')
+        session_type = data.get('session_type')
+        intent_data = data.get('intent_data', {})
+
+        if not user_pubkey or not session_type:
+            return jsonify({'error': 'user_pubkey and session_type are required'}), 400
+
+        # Validate session type
+        valid_types = ['p2p_transfer', 'lightning_lift', 'lightning_land']
+        if session_type not in valid_types:
+            return jsonify({'error': f'Invalid session_type. Must be one of: {valid_types}'}), 400
+
+        session_manager = get_session_manager()
+        session = session_manager.create_session(user_pubkey, session_type, intent_data)
+
+        return jsonify({
+            'message': 'Session created successfully',
+            'session_id': session.session_id,
+            'user_pubkey': session.user_pubkey,
+            'session_type': session.session_type,
+            'status': session.status,
+            'expires_at': session.expires_at.isoformat(),
+            'created_at': session.created_at.isoformat(),
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/sessions/<session_id>')
+def get_session_info(session_id):
+    """Get session information"""
+    try:
+        session_manager = get_session_manager()
+        session = session_manager.get_session(session_id)
+
+        if not session:
+            return jsonify({'error': 'Session not found'}), 404
+
+        response = {
+            'session_id': session.session_id,
+            'user_pubkey': session.user_pubkey,
+            'session_type': session.session_type,
+            'status': session.status,
+            'intent_data': session.intent_data,
+            'context': session.context,
+            'expires_at': session.expires_at.isoformat(),
+            'created_at': session.created_at.isoformat(),
+            'updated_at': session.updated_at.isoformat(),
+            'timestamp': datetime.now().isoformat()
+        }
+
+        if session.result_data:
+            response['result_data'] = session.result_data
+
+        if session.signed_tx:
+            response['signed_tx'] = session.signed_tx
+
+        if session.error_message:
+            response['error_message'] = session.error_message
+
+        return jsonify(response)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/sessions/<session_id>/challenge', methods=['POST'])
+def create_challenge():
+    """Create a signing challenge for a session"""
+    try:
+        session_manager = get_session_manager()
+        challenge_manager = get_challenge_manager()
+
+        session = session_manager.get_session(session_id)
+        if not session:
+            return jsonify({'error': 'Session not found'}), 404
+
+        if session.status != 'initiated':
+            return jsonify({'error': f'Session is in {session.status} state, cannot create challenge'}), 400
+
+        # Create challenge with context data
+        context_data = {
+            'session_id': session_id,
+            'session_type': session.session_type,
+            'intent_data': session.intent_data
+        }
+
+        challenge = challenge_manager.create_and_store_challenge(session_id, context_data)
+
+        if not challenge:
+            return jsonify({'error': 'Failed to create challenge'}), 500
+
+        return jsonify({
+            'message': 'Challenge created successfully',
+            'challenge_id': challenge.challenge_id,
+            'session_id': session.session_id,
+            'context': challenge.context,
+            'expires_at': challenge.expires_at.isoformat(),
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/sessions/<session_id>/respond', methods=['POST'])
+def respond_to_challenge():
+    """Respond to a challenge with signature"""
+    try:
+        data = request.get_json()
+        signature_hex = data.get('signature')
+        user_pubkey = data.get('user_pubkey')
+
+        if not signature_hex or not user_pubkey:
+            return jsonify({'error': 'signature and user_pubkey are required'}), 400
+
+        # Convert hex signature to bytes
+        try:
+            signature = bytes.fromhex(signature_hex)
+        except ValueError:
+            return jsonify({'error': 'Invalid signature format, must be hex string'}), 400
+
+        session_manager = get_session_manager()
+        challenge_manager = get_challenge_manager()
+
+        # Validate challenge response
+        if not challenge_manager.validate_challenge_response(session_id, signature, user_pubkey):
+            return jsonify({'error': 'Invalid challenge response'}), 400
+
+        # Update session status
+        if not session_manager.update_session_status(session_id, 'awaiting_signature', 'Challenge response validated'):
+            return jsonify({'error': 'Failed to update session status'}), 500
+
+        return jsonify({
+            'message': 'Challenge response validated successfully',
+            'session_id': session_id,
+            'status': 'awaiting_signature',
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/sessions/<session_id>/complete', methods=['POST'])
+def complete_session():
+    """Complete a session with result data"""
+    try:
+        data = request.get_json()
+        result_data = data.get('result_data', {})
+        signed_tx = data.get('signed_tx')
+
+        session_manager = get_session_manager()
+
+        if not session_manager.complete_session(session_id, result_data, signed_tx):
+            return jsonify({'error': 'Failed to complete session'}), 500
+
+        return jsonify({
+            'message': 'Session completed successfully',
+            'session_id': session_id,
+            'result_data': result_data,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/sessions/<session_id>/fail', methods=['POST'])
+def fail_session():
+    """Mark a session as failed"""
+    try:
+        data = request.get_json()
+        error_message = data.get('error_message', 'Session failed')
+
+        session_manager = get_session_manager()
+
+        if not session_manager.fail_session(session_id, error_message):
+            return jsonify({'error': 'Failed to fail session'}), 500
+
+        return jsonify({
+            'message': 'Session marked as failed',
+            'session_id': session_id,
+            'error_message': error_message,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/sessions')
+def get_sessions():
+    """Get sessions, optionally filtered by user pubkey"""
+    try:
+        user_pubkey = request.args.get('user_pubkey')
+        status_filter = request.args.get('status')
+
+        session_manager = get_session_manager()
+
+        if user_pubkey:
+            sessions = session_manager.get_active_sessions(user_pubkey)
+        else:
+            # Get all sessions from database
+            db_session = get_session()
+            try:
+                query = db_session.query(SigningSession)
+
+                if status_filter:
+                    query = query.filter(SigningSession.status == status_filter)
+
+                sessions = query.order_by(SigningSession.created_at.desc()).limit(50).all()
+            finally:
+                db_session.close()
+
+        sessions_data = []
+        for sess in sessions:
+            session_data = {
+                'session_id': sess.session_id,
+                'user_pubkey': sess.user_pubkey[:8] + '...',  # Truncate for privacy
+                'session_type': sess.session_type,
+                'status': sess.status,
+                'context': sess.context,
+                'created_at': sess.created_at.isoformat() if sess.created_at else None,
+                'expires_at': sess.expires_at.isoformat() if sess.expires_at else None,
+                'updated_at': sess.updated_at.isoformat() if sess.updated_at else None
+            }
+
+            if sess.result_data:
+                session_data['has_result'] = True
+
+            if sess.error_message:
+                session_data['has_error'] = True
+
+            sessions_data.append(session_data)
+
+        return jsonify({
+            'sessions': sessions_data,
+            'total_count': len(sessions_data),
+            'filters': {
+                'user_pubkey': user_pubkey[:8] + '...' if user_pubkey else None,
+                'status': status_filter
+            },
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/sessions/cleanup', methods=['POST'])
+def cleanup_expired_sessions():
+    """Clean up expired sessions and challenges"""
+    try:
+        session_manager = get_session_manager()
+        challenge_manager = get_challenge_manager()
+
+        # Clean up expired sessions
+        expired_sessions = session_manager.cleanup_expired_sessions()
+
+        # Clean up expired challenges
+        expired_challenges = challenge_manager.cleanup_expired_challenges()
+
+        return jsonify({
+            'message': 'Cleanup completed',
+            'expired_sessions_cleaned': expired_sessions,
+            'expired_challenges_cleaned': expired_challenges,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/challenges/<challenge_id>')
+def get_challenge_info(challenge_id):
+    """Get challenge information"""
+    try:
+        challenge_manager = get_challenge_manager()
+        challenge_info = challenge_manager.get_challenge_info(challenge_id)
+
+        if not challenge_info:
+            return jsonify({'error': 'Challenge not found'}), 404
+
+        return jsonify({
+            'challenge': challenge_info,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/sessions/stats')
+def get_session_stats():
+    """Get session statistics"""
+    try:
+        db_session = get_session()
+        try:
+            # Get session counts by status
+            from sqlalchemy import func
+            status_counts = db_session.query(
+                SigningSession.status,
+                func.count(SigningSession.id)
+            ).group_by(SigningSession.status).all()
+
+            # Get session counts by type
+            type_counts = db_session.query(
+                SigningSession.session_type,
+                func.count(SigningSession.id)
+            ).group_by(SigningSession.session_type).all()
+
+            # Get recent sessions
+            recent_sessions = db_session.query(SigningSession).order_by(
+                SigningSession.created_at.desc()
+            ).limit(10).all()
+
+            stats = {
+                'status_counts': {status: count for status, count in status_counts},
+                'type_counts': {session_type: count for session_type, count in type_counts},
+                'total_sessions': sum(count for _, count in status_counts),
+                'recent_sessions': [
+                    {
+                        'session_id': sess.session_id[:8] + '...',
+                        'status': sess.status,
+                        'session_type': sess.session_type,
+                        'created_at': sess.created_at.isoformat()
+                    }
+                    for sess in recent_sessions
+                ]
+            }
+
+            return jsonify({
+                'stats': stats,
+                'timestamp': datetime.now().isoformat()
+            })
+
+        finally:
+            db_session.close()
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
