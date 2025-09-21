@@ -269,3 +269,129 @@ def cleanup_expired_sessions():
         raise
     finally:
         session.close()
+
+def enqueue_vtxo_replenishment(asset_id: str, count: int):
+    """Enqueue a VTXO replenishment job"""
+    from redis import Redis
+    from rq import Queue
+    import os
+
+    redis_url = os.getenv('REDIS_URL', 'redis://redis:6379/0')
+    redis_conn = Redis.from_url(redis_url)
+    q = Queue(connection=redis_conn)
+
+    job = q.enqueue(
+        'tasks.process_vtxo_replenishment',
+        args=[asset_id, count],
+        job_timeout=300,  # 5 minutes timeout
+        job_id=f"vtxo_replenishment_{asset_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        result_ttl=3600  # Store results for 1 hour
+    )
+
+    logger.info(f"🔄 Enqueued VTXO replenishment job for asset {asset_id}: {count} VTXOs (Job ID: {job.id})")
+    return job
+
+def process_vtxo_replenishment(asset_id: str, count: int):
+    """Process VTXO replenishment by creating new VTXOs"""
+    job_id = f"vtxo_replenishment_{asset_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    session = get_session()
+
+    try:
+        # Log job start
+        job_log = JobLog(
+            job_id=job_id,
+            job_type='vtxo_replenishment',
+            status='running',
+            message=f'Starting VTXO replenishment for asset {asset_id}: {count} VTXOs'
+        )
+        session.add(job_log)
+        session.commit()
+
+        start_time = time.time()
+
+        # Get VTXO manager and create batch
+        from vtxo_manager import get_vtxo_manager
+        vtxo_manager = get_vtxo_manager()
+
+        success = vtxo_manager.create_vtxo_batch(asset_id, count)
+
+        duration = time.time() - start_time
+
+        if success:
+            result = {
+                "status": "completed",
+                "asset_id": asset_id,
+                "vtxos_created": count,
+                "duration_seconds": duration,
+                "timestamp": datetime.now().isoformat()
+            }
+
+            job_log.status = 'completed'
+            job_log.result_data = json.dumps(result)
+            job_log.duration_seconds = duration
+            session.commit()
+
+            logger.info(f"✅ VTXO replenishment completed for asset {asset_id}: {count} VTXOs created")
+            return result
+        else:
+            raise Exception("Failed to create VTXO batch")
+
+    except Exception as e:
+        logger.error(f"❌ Failed to process VTXO replenishment: {e}")
+        job_log.status = 'failed'
+        job_log.message = str(e)
+        session.commit()
+        raise
+    finally:
+        session.close()
+
+def cleanup_vtxos():
+    """Clean up expired VTXOs"""
+    job_id = f"vtxo_cleanup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    session = get_session()
+
+    try:
+        # Log job start
+        job_log = JobLog(
+            job_id=job_id,
+            job_type='vtxo_cleanup',
+            status='running',
+            message='Starting VTXO cleanup'
+        )
+        session.add(job_log)
+        session.commit()
+
+        start_time = time.time()
+
+        # Get VTXO manager and cleanup expired VTXOs
+        from vtxo_manager import get_vtxo_manager
+        vtxo_manager = get_vtxo_manager()
+
+        cleaned_count = vtxo_manager.cleanup_expired_vtxos()
+
+        duration = time.time() - start_time
+
+        # Log completion
+        result = {
+            "status": "completed",
+            "cleaned_vtxos": cleaned_count,
+            "duration_seconds": duration,
+            "timestamp": datetime.now().isoformat()
+        }
+
+        job_log.status = 'completed'
+        job_log.result_data = json.dumps(result)
+        job_log.duration_seconds = duration
+        session.commit()
+
+        logger.info(f"✅ VTXO cleanup completed: {cleaned_count} expired VTXOs cleaned")
+        return result
+
+    except Exception as e:
+        logger.error(f"❌ Failed to cleanup VTXOs: {e}")
+        job_log.status = 'failed'
+        job_log.message = str(e)
+        session.commit()
+        raise
+    finally:
+        session.close()

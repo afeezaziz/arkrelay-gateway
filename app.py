@@ -20,12 +20,17 @@ from lightning_manager import LightningManager, LightningLiftRequest, LightningL
 from lightning_monitor import LightningMonitor
 from grpc_clients.lnd_client import LndClient
 from grpc_clients import get_grpc_manager, ServiceType
+from vtxo_manager import get_vtxo_manager, get_settlement_manager, initialize_vtxo_services, shutdown_vtxo_services
 
 app = Flask(__name__)
 
 # Initialize Lightning services
 lightning_manager = None
 lightning_monitor = None
+
+# Initialize VTXO services
+vtxo_manager = None
+settlement_manager = None
 
 def initialize_lightning_services():
     """Initialize Lightning services"""
@@ -1696,9 +1701,339 @@ def list_lightning_payments():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# VTXO Management Endpoints
+
+@app.route('/vtxos/inventory/<asset_id>')
+def get_vtxo_inventory(asset_id):
+    """Get VTXO inventory status for an asset"""
+    try:
+        vtxo_manager = get_vtxo_manager()
+        inventory_status = vtxo_manager.inventory_monitor.get_asset_inventory_status(get_session(), asset_id)
+
+        return jsonify({
+            'inventory_status': inventory_status,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session = get_session()
+        session.close()
+
+@app.route('/vtxos/batch/create', methods=['POST'])
+def create_vtxo_batch():
+    """Create a batch of new VTXOs"""
+    try:
+        data = request.get_json()
+        required_fields = ['asset_id', 'count']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'{field} is required'}), 400
+
+        vtxo_manager = get_vtxo_manager()
+        success = vtxo_manager.create_vtxo_batch(
+            asset_id=data['asset_id'],
+            count=data['count'],
+            amount_sats=data.get('amount_sats')
+        )
+
+        if success:
+            return jsonify({
+                'message': 'VTXO batch created successfully',
+                'asset_id': data['asset_id'],
+                'count': data['count'],
+                'timestamp': datetime.now().isoformat()
+            })
+        else:
+            return jsonify({'error': 'Failed to create VTXO batch'}), 500
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/vtxos/assign', methods=['POST'])
+def assign_vtxo_to_user():
+    """Assign a VTXO to a user"""
+    try:
+        data = request.get_json()
+        required_fields = ['user_pubkey', 'asset_id', 'amount_needed']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'{field} is required'}), 400
+
+        vtxo_manager = get_vtxo_manager()
+        vtxo = vtxo_manager.assign_vtxo_to_user(
+            user_pubkey=data['user_pubkey'],
+            asset_id=data['asset_id'],
+            amount_needed=data['amount_needed']
+        )
+
+        if vtxo:
+            return jsonify({
+                'message': 'VTXO assigned successfully',
+                'vtxo_id': vtxo.vtxo_id,
+                'user_pubkey': vtxo.user_pubkey[:8] + '...',
+                'asset_id': vtxo.asset_id,
+                'amount_sats': vtxo.amount_sats,
+                'timestamp': datetime.now().isoformat()
+            })
+        else:
+            return jsonify({'error': 'No available VTXO for assignment'}), 404
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/vtxos/user/<user_pubkey>')
+def get_user_vtxos(user_pubkey):
+    """Get VTXOs assigned to a user"""
+    try:
+        asset_id = request.args.get('asset_id')
+        vtxo_manager = get_vtxo_manager()
+        vtxos = vtxo_manager.get_user_vtxos(user_pubkey, asset_id)
+
+        vtxos_data = []
+        for vtxo in vtxos:
+            vtxos_data.append({
+                'vtxo_id': vtxo.vtxo_id,
+                'asset_id': vtxo.asset_id,
+                'amount_sats': vtxo.amount_sats,
+                'status': vtxo.status,
+                'created_at': vtxo.created_at.isoformat(),
+                'expires_at': vtxo.expires_at.isoformat()
+            })
+
+        return jsonify({
+            'vtxos': vtxos_data,
+            'user_pubkey': user_pubkey[:8] + '...',
+            'total_count': len(vtxos_data),
+            'asset_filter': asset_id,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/vtxos/mark-spent', methods=['POST'])
+def mark_vtxo_spent():
+    """Mark a VTXO as spent"""
+    try:
+        data = request.get_json()
+        required_fields = ['vtxo_id', 'spending_txid']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'{field} is required'}), 400
+
+        vtxo_manager = get_vtxo_manager()
+        vtxo_manager.mark_vtxo_spent(data['vtxo_id'], data['spending_txid'])
+
+        return jsonify({
+            'message': 'VTXO marked as spent successfully',
+            'vtxo_id': data['vtxo_id'],
+            'spending_txid': data['spending_txid'],
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/vtxos/cleanup', methods=['POST'])
+def cleanup_expired_vtxos():
+    """Clean up expired VTXOs"""
+    try:
+        vtxo_manager = get_vtxo_manager()
+        cleaned_count = vtxo_manager.cleanup_expired_vtxos()
+
+        return jsonify({
+            'message': 'VTXO cleanup completed',
+            'cleaned_count': cleaned_count,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/vtxos/settlement/process', methods=['POST'])
+def process_vtxo_settlement():
+    """Manually trigger VTXO settlement processing"""
+    try:
+        settlement_manager = get_settlement_manager()
+        settlement_manager.process_hourly_settlement()
+
+        return jsonify({
+            'message': 'VTXO settlement processing triggered',
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/vtxos/settlement/status')
+def get_settlement_status():
+    """Get VTXO settlement status"""
+    try:
+        session = get_session()
+        try:
+            # Get settlement statistics
+            total_vtxos = session.query(Vtxo).count()
+            available_vtxos = session.query(Vtxo).filter(Vtxo.status == 'available').count()
+            assigned_vtxos = session.query(Vtxo).filter(Vtxo.status == 'assigned').count()
+            spent_vtxos = session.query(Vtxo).filter(Vtxo.status == 'spent').count()
+            settled_vtxos = session.query(Vtxo).filter(Vtxo.status == 'settled').count()
+
+            # Get recent settlements
+            recent_settlements = session.query(Transaction).filter(
+                Transaction.tx_type == 'settlement_tx'
+            ).order_by(Transaction.created_at.desc()).limit(10).all()
+
+            settlements_data = []
+            for tx in recent_settlements:
+                settlements_data.append({
+                    'txid': tx.txid,
+                    'status': tx.status,
+                    'amount_sats': tx.amount_sats,
+                    'fee_sats': tx.fee_sats,
+                    'created_at': tx.created_at.isoformat()
+                })
+
+            return jsonify({
+                'settlement_status': {
+                    'total_vtxos': total_vtxos,
+                    'available_vtxos': available_vtxos,
+                    'assigned_vtxos': assigned_vtxos,
+                    'spent_vtxos': spent_vtxos,
+                    'settled_vtxos': settled_vtxos,
+                    'pending_settlement': spent_vtxos - settled_vtxos
+                },
+                'recent_settlements': settlements_data,
+                'timestamp': datetime.now().isoformat()
+            })
+
+        finally:
+            session.close()
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/vtxos/monitor/start', methods=['POST'])
+def start_vtxo_monitoring():
+    """Start VTXO monitoring services"""
+    try:
+        global vtxo_manager, settlement_manager
+
+        if vtxo_manager and vtxo_manager.inventory_monitor.running:
+            return jsonify({'message': 'VTXO monitoring already running'})
+
+        vtxo_manager = get_vtxo_manager()
+        settlement_manager = get_settlement_manager()
+
+        vtxo_manager.start_services()
+        settlement_manager.start_settlement_service()
+
+        return jsonify({
+            'message': 'VTXO monitoring services started',
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/vtxos/monitor/stop', methods=['POST'])
+def stop_vtxo_monitoring():
+    """Stop VTXO monitoring services"""
+    try:
+        global vtxo_manager, settlement_manager
+
+        if vtxo_manager:
+            vtxo_manager.stop_services()
+
+        if settlement_manager:
+            settlement_manager.stop_settlement_service()
+
+        return jsonify({
+            'message': 'VTXO monitoring services stopped',
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/vtxos/monitor/status')
+def get_vtxo_monitoring_status():
+    """Get VTXO monitoring status"""
+    try:
+        global vtxo_manager, settlement_manager
+
+        inventory_running = vtxo_manager.inventory_monitor.running if vtxo_manager else False
+        settlement_running = settlement_manager.running if settlement_manager else False
+
+        return jsonify({
+            'monitoring_status': {
+                'inventory_monitoring': inventory_running,
+                'settlement_service': settlement_running,
+                'overall_status': 'running' if (inventory_running and settlement_running) else 'stopped'
+            },
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/vtxos/stats')
+def get_vtxo_stats():
+    """Get comprehensive VTXO statistics"""
+    try:
+        session = get_session()
+        try:
+            # Get VTXO counts by asset
+            from sqlalchemy import func
+            asset_stats = session.query(
+                Asset.asset_id,
+                Asset.ticker,
+                func.count(Vtxo.id).label('total_vtxos'),
+                func.sum(func.case([(Vtxo.status == 'available', 1)], else_=0)).label('available_vtxos'),
+                func.sum(func.case([(Vtxo.status == 'assigned', 1)], else_=0)).label('assigned_vtxos'),
+                func.sum(func.case([(Vtxo.status == 'spent', 1)], else_=0)).label('spent_vtxos'),
+                func.sum(func.case([(Vtxo.status == 'settled', 1)], else_=0)).label('settled_vtxos')
+            ).join(Vtxo, Asset.asset_id == Vtxo.asset_id, isouter=True).group_by(Asset.asset_id, Asset.ticker).all()
+
+            stats_data = []
+            for stat in asset_stats:
+                stats_data.append({
+                    'asset_id': stat.asset_id,
+                    'ticker': stat.ticker,
+                    'total_vtxos': stat.total_vtxos or 0,
+                    'available_vtxos': stat.available_vtxos or 0,
+                    'assigned_vtxos': stat.assigned_vtxos or 0,
+                    'spent_vtxos': stat.spent_vtxos or 0,
+                    'settled_vtxos': stat.settled_vtxos or 0,
+                    'utilization_rate': round((stat.assigned_vtxos / stat.total_vtxos * 100) if stat.total_vtxos > 0 else 0, 2)
+                })
+
+            # Get overall statistics
+            total_vtxos = session.query(Vtxo).count()
+            total_value = session.query(func.sum(Vtxo.amount_sats)).scalar() or 0
+
+            return jsonify({
+                'vtxo_statistics': {
+                    'overall': {
+                        'total_vtxos': total_vtxos,
+                        'total_value_sats': total_value,
+                        'average_vtxo_value': round(total_value / total_vtxos, 2) if total_vtxos > 0 else 0
+                    },
+                    'by_asset': stats_data
+                },
+                'timestamp': datetime.now().isoformat()
+            })
+
+        finally:
+            session.close()
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 def initialize_services():
     """Initialize all services when the app starts"""
-    global nostr_client, redis_manager, event_handler
+    global nostr_client, redis_manager, event_handler, vtxo_manager, settlement_manager
 
     # Auto-start Lightning service if configured
     if os.getenv('LIGHTNING_AUTO_START', 'true').lower() == 'true':
@@ -1728,6 +2063,19 @@ def initialize_services():
             print("✅ Nostr service auto-started")
         except Exception as e:
             print(f"❌ Failed to auto-start Nostr service: {e}")
+
+    # Auto-start VTXO services if configured
+    if os.getenv('VTXO_AUTO_START', 'true').lower() == 'true':
+        try:
+            vtxo_initialized = initialize_vtxo_services()
+            if vtxo_initialized:
+                vtxo_manager = get_vtxo_manager()
+                settlement_manager = get_settlement_manager()
+                print("✅ VTXO services auto-started")
+            else:
+                print("❌ VTXO services failed to start")
+        except Exception as e:
+            print(f"❌ Failed to auto-start VTXO services: {e}")
 
 if __name__ == '__main__':
     # Initialize services on startup
