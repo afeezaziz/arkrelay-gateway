@@ -19,8 +19,8 @@ from prometheus_client import Counter, Histogram, Gauge, start_http_server
 import requests
 import os
 
-from config import Config
-from models import (
+from core.config import Config
+from core.models import (
     JobLog, SystemMetrics, Heartbeat,
     SigningSession, Vtxo, Transaction,
     Asset, get_session

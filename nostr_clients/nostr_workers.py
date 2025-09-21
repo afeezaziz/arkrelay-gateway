@@ -4,8 +4,8 @@ import time
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
-from models import get_session, SigningSession, SigningChallenge, Transaction, AssetBalance, Asset
-from config import Config
+from core.models import get_session, SigningSession, SigningChallenge, Transaction, AssetBalance, Asset
+from core.config import Config
 from .nostr_redis import get_redis_manager
 from .nostr_client import get_nostr_client
 

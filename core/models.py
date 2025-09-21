@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.dialects.mysql import JSON
 from datetime import datetime
 import os
-from config import Config
+from core.config import Config
 
 Base = declarative_base()
 

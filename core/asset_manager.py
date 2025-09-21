@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Optional, Any, List, Tuple
 from enum import Enum
 import logging
-from models import Asset, AssetBalance, Vtxo, get_session
+from core.models import Asset, AssetBalance, Vtxo, get_session
 from grpc_clients import get_grpc_manager, ServiceType
 from sqlalchemy import and_, or_, func
 

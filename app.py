@@ -5,27 +5,27 @@ from rq_scheduler import Scheduler
 from datetime import datetime, timedelta
 import os
 import json
-from models import JobLog, SystemMetrics, Heartbeat, get_session
+from core.models import JobLog, SystemMetrics, Heartbeat, get_session
 from grpc_clients import get_grpc_manager, ServiceType
 from nostr_clients.nostr_client import get_nostr_client, initialize_nostr_client, shutdown_nostr_client
 from nostr_clients.nostr_handlers import get_event_handler, initialize_event_handler
 from nostr_clients.nostr_redis import get_redis_manager, initialize_redis_manager, shutdown_redis_manager
 from nostr_clients.nostr_workers import get_action_intent_worker, get_signing_response_worker
-from session_manager import get_session_manager
-from challenge_manager import get_challenge_manager
-from transaction_processor import get_transaction_processor
-from signing_orchestrator import get_signing_orchestrator
-from asset_manager import get_asset_manager
-from lightning_manager import LightningManager, LightningLiftRequest, LightningLandRequest
-from lightning_monitor import LightningMonitor
+from core.session_manager import get_session_manager
+from core.challenge_manager import get_challenge_manager
+from core.transaction_processor import get_transaction_processor
+from core.signing_orchestrator import get_signing_orchestrator
+from core.asset_manager import get_asset_manager
+from core.lightning_manager import LightningManager, LightningLiftRequest, LightningLandRequest
+from core.lightning_monitor import LightningMonitor
 from grpc_clients.lnd_client import LndClient
 from grpc_clients import get_grpc_manager, ServiceType
-from vtxo_manager import get_vtxo_manager, get_settlement_manager, initialize_vtxo_services, shutdown_vtxo_services
+from core.vtxo_manager import get_vtxo_manager, get_settlement_manager, initialize_vtxo_services, shutdown_vtxo_services
 
 # Import Phase 8 monitoring and operations components
-from monitoring import get_monitoring_system, initialize_monitoring, shutdown_monitoring
-from admin_api import admin_bp
-from cache_manager import initialize_performance_systems, shutdown_performance_systems, get_cache_manager
+from core.monitoring import get_monitoring_system, initialize_monitoring, shutdown_monitoring
+from core.admin_api import admin_bp
+from core.cache_manager import initialize_performance_systems, shutdown_performance_systems, get_cache_manager
 
 app = Flask(__name__)
 
@@ -131,6 +131,44 @@ def health():
         },
         'timestamp': datetime.now().isoformat()
     })
+
+@app.route('/ready')
+def ready():
+    """Readiness check endpoint"""
+    try:
+        # Check basic services
+        redis_ok = redis_conn.ping()
+
+        # Check database
+        session = get_session()
+        try:
+            session.execute("SELECT 1")
+            db_ok = True
+        except:
+            db_ok = False
+        finally:
+            session.close()
+
+        # Check if essential services are available
+        grpc_manager = get_grpc_manager()
+        grpc_available = grpc_manager is not None
+
+        # Basic readiness check
+        ready = redis_ok and db_ok and grpc_available
+
+        return jsonify({
+            'ready': ready,
+            'redis_connected': redis_ok,
+            'database_connected': db_ok,
+            'grpc_available': grpc_available,
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            'ready': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 503
 
 @app.route('/health/comprehensive')
 def comprehensive_health():
@@ -1190,7 +1228,7 @@ def execute_signing_step(session_id, step):
         signature_data = data.get('signature_data')
 
         orchestrator = get_signing_orchestrator()
-        from signing_orchestrator import SigningStep
+        from core.signing_orchestrator import SigningStep
         step_enum = SigningStep(step)
 
         result = orchestrator.execute_signing_step(session_id, step_enum, signature_data)
@@ -1912,7 +1950,7 @@ def mark_vtxo_spent():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/vtxos/cleanup', methods=['POST'])
-def cleanup_expired_vtxos():
+def cleanup_vtxos():
     """Clean up expired VTXOs"""
     try:
         vtxo_manager = get_vtxo_manager()

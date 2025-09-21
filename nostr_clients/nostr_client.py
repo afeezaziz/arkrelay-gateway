@@ -15,8 +15,8 @@ from pynostr.relay_manager import RelayManager
 from pynostr.key import PrivateKey, PublicKey
 from pynostr.encrypted_dm import EncryptedDirectMessage
 
-from config import Config
-from models import get_session, SigningSession, SigningChallenge
+from core.config import Config
+from core.models import get_session, SigningSession, SigningChallenge
 from redis import Redis
 
 logger = logging.getLogger(__name__)

@@ -8,8 +8,8 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
-from models import SigningChallenge, SigningSession, get_session
-from session_manager import SessionState, get_session_manager
+from core.models import SigningChallenge, SigningSession, get_session
+from core.session_manager import SessionState, get_session_manager
 
 logger = logging.getLogger(__name__)
 

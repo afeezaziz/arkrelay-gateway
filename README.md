@@ -214,14 +214,22 @@ services:
 ### Running Tests
 ```bash
 # Run all tests
-pytest
+uv run pytest
+
+# Run unit tests only
+uv run pytest -m unit
 
 # Run with coverage
-pytest --cov=.
+uv run pytest --cov=.
 
 # Run specific test file
-pytest test_tasks.py
+uv run pytest test_tasks.py
 ```
+
+**Current Test Status:**
+- **Unit Tests**: 41/67 passing (61.2% success rate)
+- **Total Test Suite**: 1,093 comprehensive tests
+- **Coverage Areas**: Flask app, Core config, Lightning integration, Session management, and more
 
 ### Code Quality
 ```bash

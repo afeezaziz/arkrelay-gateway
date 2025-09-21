@@ -17,7 +17,7 @@ from enum import Enum
 import grpc
 from grpc import StatusCode
 
-from config import Config
+from core.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -212,36 +212,38 @@ class GrpcClientManager:
     def _initialize_clients(self):
         """Initialize all gRPC clients"""
         try:
+            config = Config()
+
             # ARKD client
             arkd_config = ConnectionConfig(
-                host=Config.ARKD_HOST,
-                port=Config.ARKD_PORT,
-                tls_cert=Config.ARKD_TLS_CERT,
-                macaroon=Config.ARKD_MACAROON,
-                timeout_seconds=Config.GRPC_TIMEOUT_SECONDS,
-                max_message_length=Config.GRPC_MAX_MESSAGE_LENGTH
+                host=config.ARKD_HOST,
+                port=config.ARKD_PORT,
+                tls_cert=config.ARKD_TLS_CERT,
+                macaroon=config.ARKD_MACAROON,
+                timeout_seconds=config.GRPC_TIMEOUT_SECONDS,
+                max_message_length=config.GRPC_MAX_MESSAGE_LENGTH
             )
             self.clients[ServiceType.ARKD] = ArkdClient(arkd_config)
 
             # TAPD client
             tapd_config = ConnectionConfig(
-                host=Config.TAPD_HOST,
-                port=Config.TAPD_PORT,
-                tls_cert=Config.TAPD_TLS_CERT,
-                macaroon=Config.TAPD_MACAROON,
-                timeout_seconds=Config.GRPC_TIMEOUT_SECONDS,
-                max_message_length=Config.GRPC_MAX_MESSAGE_LENGTH
+                host=config.TAPD_HOST,
+                port=config.TAPD_PORT,
+                tls_cert=config.TAPD_TLS_CERT,
+                macaroon=config.TAPD_MACAROON,
+                timeout_seconds=config.GRPC_TIMEOUT_SECONDS,
+                max_message_length=config.GRPC_MAX_MESSAGE_LENGTH
             )
             self.clients[ServiceType.TAPD] = TapdClient(tapd_config)
 
             # LND client
             lnd_config = ConnectionConfig(
-                host=Config.LND_HOST,
-                port=Config.LND_PORT,
-                tls_cert=Config.LND_TLS_CERT,
-                macaroon=Config.LND_MACAROON,
-                timeout_seconds=Config.GRPC_TIMEOUT_SECONDS,
-                max_message_length=Config.GRPC_MAX_MESSAGE_LENGTH
+                host=config.LND_HOST,
+                port=config.LND_PORT,
+                tls_cert=config.LND_TLS_CERT,
+                macaroon=config.LND_MACAROON,
+                timeout_seconds=config.GRPC_TIMEOUT_SECONDS,
+                max_message_length=config.GRPC_MAX_MESSAGE_LENGTH
             )
             self.clients[ServiceType.LND] = LndClient(lnd_config)
 

@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
 from .nostr_client import NostrClient, NostrEvent, ActionIntent, SigningResponse, get_nostr_client
-from models import get_session, SigningSession, SigningChallenge, AssetBalance
-from config import Config
+from core.models import get_session, SigningSession, SigningChallenge, AssetBalance
+from core.config import Config
 from redis import Redis
 
 logger = logging.getLogger(__name__)

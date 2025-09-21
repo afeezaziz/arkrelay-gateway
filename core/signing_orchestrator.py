@@ -6,10 +6,10 @@ from datetime import datetime, timedelta
 from typing import Dict, Optional, Any, List, Tuple
 from enum import Enum
 import logging
-from models import Transaction, SigningSession, get_session
-from session_manager import get_session_manager, SessionState
-from challenge_manager import get_challenge_manager
-from transaction_processor import get_transaction_processor, TransactionError
+from core.models import Transaction, SigningSession, get_session
+from core.session_manager import get_session_manager, SessionState
+from core.challenge_manager import get_challenge_manager
+from core.transaction_processor import get_transaction_processor, TransactionError
 from grpc_clients import get_grpc_manager, ServiceType
 from nostr_clients.nostr_client import get_nostr_client
 

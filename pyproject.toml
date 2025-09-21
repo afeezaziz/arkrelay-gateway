@@ -25,4 +25,5 @@ dependencies = [
     "bech32>=1.2.0",
     "pytest>=8.0.0",
     "pytest-cov>=5.0.0",
+    "prometheus-client>=0.23.1",
 ]

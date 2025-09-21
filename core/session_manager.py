@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Optional, Any, List
 from enum import Enum
 import logging
-from models import SigningSession, SigningChallenge, get_session
+from core.models import SigningSession, SigningChallenge, get_session
 from sqlalchemy import and_, or_
 
 logger = logging.getLogger(__name__)

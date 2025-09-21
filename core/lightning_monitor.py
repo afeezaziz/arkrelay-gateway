@@ -14,12 +14,12 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
-from models import LightningInvoice, AssetBalance, SystemMetrics, get_session
-from lightning_manager import LightningManager
+from core.models import LightningInvoice, AssetBalance, SystemMetrics, get_session
+from core.lightning_manager import LightningManager
 
 # Try to import redis_client, fallback to None if not available
 try:
-    from config import redis_client
+    from core.config import redis_client
 except ImportError:
     redis_client = None
 

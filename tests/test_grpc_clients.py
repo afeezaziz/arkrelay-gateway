@@ -15,7 +15,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from grpc_clients import GrpcClientManager, ServiceType, CircuitBreaker
-from config import Config
+from core.config import Config
 
 
 class TestCircuitBreaker(unittest.TestCase):

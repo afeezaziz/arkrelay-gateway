@@ -17,7 +17,7 @@ from sqlalchemy.orm import sessionmaker, scoped_session
 import psutil
 import gc
 
-from config import Config
+from core.config import Config
 
 class CacheManager:
     """Advanced caching system with Redis backend"""

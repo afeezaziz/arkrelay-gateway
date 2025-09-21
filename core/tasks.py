@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 import logging
 import psutil
-from models import JobLog, SystemMetrics, Heartbeat, get_session
+from core.models import JobLog, SystemMetrics, Heartbeat, get_session
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -229,8 +229,8 @@ def cleanup_expired_sessions():
         start_time = time.time()
 
         # Import the managers
-        from session_manager import get_session_manager
-        from challenge_manager import get_challenge_manager
+        from core.session_manager import get_session_manager
+        from core.challenge_manager import get_challenge_manager
 
         session_manager = get_session_manager()
         challenge_manager = get_challenge_manager()
@@ -310,7 +310,7 @@ def process_vtxo_replenishment(asset_id: str, count: int):
         start_time = time.time()
 
         # Get VTXO manager and create batch
-        from vtxo_manager import get_vtxo_manager
+        from core.vtxo_manager import get_vtxo_manager
         vtxo_manager = get_vtxo_manager()
 
         success = vtxo_manager.create_vtxo_batch(asset_id, count)
@@ -364,7 +364,7 @@ def cleanup_vtxos():
         start_time = time.time()
 
         # Get VTXO manager and cleanup expired VTXOs
-        from vtxo_manager import get_vtxo_manager
+        from core.vtxo_manager import get_vtxo_manager
         vtxo_manager = get_vtxo_manager()
 
         cleaned_count = vtxo_manager.cleanup_expired_vtxos()

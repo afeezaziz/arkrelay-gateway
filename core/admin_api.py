@@ -12,19 +12,21 @@ import threading
 import time
 from sqlalchemy import func, desc
 import psutil
+from functools import wraps
 
-from models import (
+from core.models import (
     JobLog, SystemMetrics, Heartbeat, SigningSession,
     Vtxo, Transaction, Asset, get_session
 )
-from monitoring import get_monitoring_system, PrometheusMetrics
-from config import Config
+from core.monitoring import get_monitoring_system, PrometheusMetrics
+from core.config import Config
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 # Authentication decorator for admin endpoints
 def require_admin_auth(f):
     """Decorator to require admin authentication"""
+    @wraps(f)
     def decorated_function(*args, **kwargs):
         # Simple admin key authentication - in production, use proper auth
         admin_key = request.headers.get('X-Admin-Key') or request.args.get('admin_key')

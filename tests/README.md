@@ -133,14 +133,58 @@ def test_real_daemon_connection():
 
 ## Test Coverage
 
-To run tests with coverage:
+### Current Coverage Status
+
+**Overall Coverage**: 13% (38 working tests passed)
+- **Total Statements**: 8,208
+- **Covered Statements**: 1,093
+- **Missed Statements**: 7,115
+
+#### Coverage by Module:
+- **`core/config.py`**: 87% coverage
+- **`core/models.py`**: 98% coverage
+- **`tests/test_models.py`**: 100% coverage
+- **`tests/test_grpc_clients.py`**: 99% coverage
+- **`tests/test_nostr_encryption.py`**: 89% coverage
+- **`grpc_clients/` modules**: 41-49% coverage
+- **`nostr_clients/` modules**: 0-44% coverage
+- **`app.py`**: 0% coverage (main application)
+
+#### Working Tests (38 tests passing):
+- **Nostr encryption**: 9/9 tests passing
+- **Database models**: 21/21 tests passing
+- **gRPC clients**: 8/8 tests passing
+
+### Running Coverage Analysis
+
 ```bash
-uv run python run_tests.py --coverage
+# Run all tests with coverage
+uv run pytest --cov=. --cov-report=term-missing --cov-report=html
+
+# Run specific test categories with coverage
+uv run pytest -m unit --cov=. --cov-report=term-missing
+uv run pytest -m integration --cov=. --cov-report=term-missing
+
+# Run only working tests with coverage
+uv run pytest tests/test_nostr_encryption.py tests/test_models.py tests/test_grpc_clients.py --cov=. --cov-report=term-missing
 ```
 
 Coverage reports will be generated in:
-- `htmlcov/` - HTML report
-- Terminal coverage summary
+- `htmlcov/` - HTML report (detailed interactive coverage)
+- Terminal coverage summary (missing lines shown)
+
+### Coverage Challenges
+
+**Current Issues:**
+1. **Main Application**: 0% coverage due to Flask app test failures
+2. **Integration Tests**: Most failing, limiting overall coverage
+3. **External Dependencies**: gRPC and Nostr clients have low coverage due to mocking complexity
+
+**Improvement Strategy:**
+1. Fix basic Flask app and integration test failures
+2. Improve mocking for external service dependencies
+3. Focus on core modules first for 80%+ coverage
+4. Incremental approach to achieve 60%+ overall coverage
 
 ## Test Data
 
