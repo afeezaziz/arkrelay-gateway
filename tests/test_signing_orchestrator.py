@@ -2,10 +2,10 @@ import pytest
 import json
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, MagicMock
-from models import SigningSession, SigningChallenge, Transaction, get_session
-from signing_orchestrator import SigningOrchestrator, SigningCeremonyError, SigningTimeoutError, SigningStep
-from session_manager import get_session_manager, SessionState
-from challenge_manager import get_challenge_manager
+from core.models import SigningSession, SigningChallenge, Transaction, get_session
+from core.signing_orchestrator import SigningOrchestrator, SigningCeremonyError, SigningTimeoutError, SigningStep
+from core.session_manager import get_session_manager, SessionState
+from core.challenge_manager import get_challenge_manager
 
 class TestSigningOrchestrator:
     """Test cases for SigningOrchestrator"""

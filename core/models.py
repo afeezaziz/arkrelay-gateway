@@ -163,7 +163,8 @@ class LightningInvoice(Base):
 
 # Database setup
 def get_database_url():
-    return Config.DATABASE_URL
+    config = Config()
+    return config.DATABASE_URL
 
 def create_tables():
     engine = create_engine(get_database_url())

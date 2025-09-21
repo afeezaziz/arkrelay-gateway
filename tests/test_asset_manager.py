@@ -2,8 +2,8 @@ import pytest
 import json
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
-from models import Asset, AssetBalance, Vtxo, get_session
-from asset_manager import AssetManager, AssetError, InsufficientAssetError
+from core.models import Asset, AssetBalance, Vtxo, get_session
+from core.asset_manager import AssetManager, AssetError, InsufficientAssetError
 from sqlalchemy import func
 
 class TestAssetManager:
@@ -548,12 +548,320 @@ class TestAssetManager:
                 action="unknown_action"
             )
 
-    def test_sign_with_gateway_key(self, asset_manager):
-        """Test gateway key signing"""
-        signature = asset_manager._sign_with_gateway_key("test_session_id")
+    def test_initialization_with_custom_settings(self):
+        """Test asset manager initialization with custom settings"""
+        manager = AssetManager(reserve_ratio=0.2, vtxo_expiry_hours=48)
+        assert manager.reserve_ratio == 0.2
+        assert manager.vtxo_expiry_hours == 48
 
-        assert isinstance(signature, str)
-        assert len(signature) > 0
+    def test_asset_manager_initialization_default(self):
+        """Test asset manager initialization with default settings"""
+        manager = AssetManager()
+        assert manager.reserve_ratio == 0.1
+        assert manager.vtxo_expiry_hours == 24
+        assert manager.grpc_manager is not None
+
+    def test_grpc_manager_integration(self):
+        """Test gRPC manager integration"""
+        manager = AssetManager()
+        assert manager.grpc_manager is not None
+        # Test that we can access gRPC clients
+        arkd_client = manager.grpc_manager.get_client(ServiceType.ARKD)
+        # Note: This may be None in test environment
+        assert arkd_client is None or hasattr(arkd_client, 'health_check')
+
+    def test_database_session_management(self, asset_manager, sample_asset):
+        """Test proper database session management"""
+        # Test that sessions are properly closed
+        with patch('core.asset_manager.get_session') as mock_get_session:
+            mock_session = Mock()
+            mock_get_session.return_value = mock_session
+
+            asset_manager.get_asset_info("BTC")
+
+            # Session should be closed
+            mock_session.close.assert_called_once()
+
+    def test_transaction_rollback_on_error(self, asset_manager):
+        """Test transaction rollback on error"""
+        # Mock session that raises exception during commit
+        with patch('core.asset_manager.get_session') as mock_get_session:
+            mock_session = Mock()
+            mock_session.query.return_value.filter_by.return_value.first.return_value = None
+            mock_session.commit.side_effect = Exception("Database error")
+            mock_get_session.return_value = mock_session
+
+            with pytest.raises(Exception, match="Database error"):
+                asset_manager.create_asset("TEST", "Test", "TEST")
+
+            # Rollback should be called
+            mock_session.rollback.assert_called_once()
+            # Session should be closed
+            mock_session.close.assert_called_once()
+
+    def test_concurrent_operations(self, asset_manager, sample_asset):
+        """Test concurrent asset operations"""
+        import threading
+        import time
+
+        results = []
+        errors = []
+
+        def mint_assets():
+            try:
+                result = asset_manager.mint_assets(
+                    f"user_{threading.current_thread().ident}",
+                    "BTC",
+                    100
+                )
+                results.append(result)
+            except Exception as e:
+                errors.append(e)
+
+        # Create multiple threads
+        threads = []
+        for _ in range(5):
+            thread = threading.Thread(target=mint_assets)
+            threads.append(thread)
+            thread.start()
+
+        # Wait for all threads to complete
+        for thread in threads:
+            thread.join()
+
+        # All operations should succeed
+        assert len(errors) == 0
+        assert len(results) == 5
+
+    def test_asset_validation(self, asset_manager):
+        """Test asset input validation"""
+        # Test invalid asset types
+        with pytest.raises(Exception):
+            asset_manager.create_asset("TEST", "Test", "TEST", asset_type="invalid_type")
+
+        # Test invalid decimal places
+        with pytest.raises(Exception):
+            asset_manager.create_asset("TEST", "Test", "TEST", decimal_places=-1)
+
+    def test_balance_validation(self, asset_manager, sample_asset):
+        """Test balance validation"""
+        # Test negative amounts
+        with pytest.raises(Exception):
+            asset_manager.mint_assets("test_user", "BTC", -100)
+
+        # Test negative transfers
+        with pytest.raises(Exception):
+            asset_manager.transfer_assets("user1", "user2", "BTC", -100)
+
+    def test_vtxo_expiry_handling(self, asset_manager, sample_asset):
+        """Test VTXO expiry handling"""
+        # Create VTXO that's about to expire
+        db_session = get_session()
+        try:
+            almost_expired_vtxo = Vtxo(
+                vtxo_id="almost_expired_vtxo_id",
+                txid="almost_expired_txid",
+                vout=0,
+                amount_sats=1000,
+                script_pubkey=b"test_script",
+                asset_id="BTC",
+                user_pubkey="test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
+                status="available",
+                expires_at=datetime.utcnow() + timedelta(seconds=1)  # Almost expired
+            )
+            db_session.add(almost_expired_vtxo)
+            db_session.commit()
+        finally:
+            db_session.close()
+
+        # Wait for expiry
+        import time
+        time.sleep(2)
+
+        # Try to assign expired VTXO
+        with pytest.raises(AssetError, match="has expired"):
+            asset_manager.manage_vtxos(
+                "test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
+                action="assign",
+                vtxo_id="almost_expired_vtxo_id"
+            )
+
+    def test_asset_metadata_handling(self, asset_manager):
+        """Test asset metadata handling"""
+        metadata = {
+            "description": "Test asset",
+            "icon_url": "https://example.com/icon.png",
+            "website": "https://example.com",
+            "custom_fields": {"field1": "value1", "field2": "value2"}
+        }
+
+        result = asset_manager.create_asset(
+            "METADATA",
+            "Metadata Asset",
+            "META",
+            metadata=metadata
+        )
+
+        assert result['asset_metadata'] == metadata
+
+        # Retrieve asset and verify metadata
+        info = asset_manager.get_asset_info("METADATA")
+        assert info['metadata'] == metadata
+
+    def test_large_amount_handling(self, asset_manager, sample_asset):
+        """Test handling of large amounts"""
+        # Test with very large numbers
+        large_amount = 10**18  # 1 billion BTC
+
+        result = asset_manager.mint_assets(
+            "whale_user",
+            "BTC",
+            large_amount
+        )
+
+        assert result['amount_minted'] == large_amount
+        assert result['new_balance'] == large_amount
+
+        # Verify balance can handle large amounts
+        balance = asset_manager.get_user_balance("whale_user", "BTC")
+        assert balance['balance'] == large_amount
+
+    def test_edge_case_empty_strings(self, asset_manager):
+        """Test edge cases with empty strings"""
+        # Test empty asset ID
+        with pytest.raises(Exception):
+            asset_manager.create_asset("", "Empty", "EMPTY")
+
+        # Test empty user pubkey
+        with pytest.raises(Exception):
+            asset_manager.get_user_balance("", "BTC")
+
+    def test_edge_case_zero_amounts(self, asset_manager, sample_asset):
+        """Test edge cases with zero amounts"""
+        # Test minting zero amount
+        result = asset_manager.mint_assets("test_user", "BTC", 0)
+        assert result['amount_minted'] == 0
+        assert result['new_balance'] == 0
+
+        # Test transferring zero amount
+        with pytest.raises(InsufficientAssetError):
+            asset_manager.transfer_assets("user1", "user2", "BTC", 0)
+
+    def test_vtxo_id_uniqueness(self, asset_manager, sample_asset):
+        """Test VTXO ID uniqueness"""
+        # Create multiple VTXOs with same parameters
+        result1 = asset_manager.manage_vtxos(
+            "test_user",
+            asset_id="BTC",
+            action="create",
+            amount_sats=1000
+        )
+
+        result2 = asset_manager.manage_vtxos(
+            "test_user",
+            asset_id="BTC",
+            action="create",
+            amount_sats=1000
+        )
+
+        # VTXO IDs should be different due to timestamp
+        assert result1['vtxo_id'] != result2['vtxo_id']
+
+    def test_asset_stats_comprehensive(self, asset_manager):
+        """Test comprehensive asset statistics"""
+        # Create multiple assets and balances
+        asset_manager.create_asset("STATS1", "Stats Asset 1", "S1")
+        asset_manager.create_asset("STATS2", "Stats Asset 2", "S2")
+        asset_manager.create_asset("STATS3", "Stats Asset 3", "S3")
+
+        # Mint various amounts
+        users = [f"user_{i}" for i in range(10)]
+        for user in users:
+            asset_manager.mint_assets(user, "STATS1", 1000)
+            asset_manager.mint_assets(user, "STATS2", 2000)
+            asset_manager.mint_assets(user, "STATS3", 3000)
+
+        stats = asset_manager.get_asset_stats()
+
+        assert stats['assets']['total'] >= 3
+        assert stats['assets']['active'] >= 3
+        assert stats['balances']['total_balances'] >= 30  # 10 users * 3 assets
+        assert stats['balances']['total_balance_sum'] >= 60000  # 10 * (1000 + 2000 + 3000)
+        assert len(stats['top_assets']) <= 10  # Should return top 10
+
+    def test_cleanup_performance(self, asset_manager, sample_asset):
+        """Test cleanup performance with many expired VTXOs"""
+        import time
+
+        # Create many expired VTXOs
+        db_session = get_session()
+        try:
+            for i in range(100):
+                expired_vtxo = Vtxo(
+                    vtxo_id=f"expired_vtxo_{i}",
+                    txid=f"expired_txid_{i}",
+                    vout=0,
+                    amount_sats=100,
+                    script_pubkey=f"script_{i}".encode(),
+                    asset_id="BTC",
+                    user_pubkey="test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
+                    status="available",
+                    expires_at=datetime.utcnow() - timedelta(hours=1)
+                )
+                db_session.add(expired_vtxo)
+            db_session.commit()
+        finally:
+            db_session.close()
+
+        # Measure cleanup time
+        start_time = time.time()
+        result = asset_manager.cleanup_expired_vtxos()
+        end_time = time.time()
+
+        assert result['cleaned_vtxos'] == 100
+        assert result['total_amount_sats'] == 10000
+        # Should complete quickly (less than 5 seconds)
+        assert end_time - start_time < 5.0
+
+    @pytest.mark.slow
+    def test_large_dataset_performance(self, asset_manager):
+        """Test performance with large dataset"""
+        import time
+
+        # Create many assets and balances
+        num_assets = 50
+        num_users = 1000
+
+        # Create assets
+        for i in range(num_assets):
+            asset_manager.create_asset(f"ASSET_{i}", f"Asset {i}", f"A{i}")
+
+        # Mint balances for many users
+        start_time = time.time()
+        for i in range(num_users):
+            for j in range(min(10, num_assets)):  # Each user gets 10 assets
+                asset_manager.mint_assets(f"user_{i}", f"ASSET_{j}", 1000)
+
+        mint_time = time.time() - start_time
+
+        # Test list performance
+        start_time = time.time()
+        assets = asset_manager.list_assets()
+        list_time = time.time() - start_time
+
+        # Test stats performance
+        start_time = time.time()
+        stats = asset_manager.get_asset_stats()
+        stats_time = time.time() - start_time
+
+        assert len(assets) >= num_assets
+        assert stats['assets']['total'] >= num_assets
+        assert stats['balances']['total_balances'] >= num_users * 10
+
+        # Performance assertions (should complete in reasonable time)
+        assert mint_time < 30.0  # Should complete in less than 30 seconds
+        assert list_time < 1.0    # Should complete in less than 1 second
+        assert stats_time < 5.0   # Should complete in less than 5 seconds
 
     def test_generate_vtxo_id(self, asset_manager):
         """Test VTXO ID generation"""
