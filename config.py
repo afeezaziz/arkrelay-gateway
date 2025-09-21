@@ -73,6 +73,25 @@ class Config:
     # Monitoring Configuration
     ENABLE_METRICS: bool = os.getenv('ENABLE_METRICS', 'true').lower() == 'true'
     METRICS_PORT: int = int(os.getenv('METRICS_PORT', 8080))
+    MONITORING_AUTO_START: bool = os.getenv('MONITORING_AUTO_START', 'true').lower() == 'true'
+    PERFORMANCE_OPTIMIZATION: bool = os.getenv('PERFORMANCE_OPTIMIZATION', 'true').lower() == 'true'
+
+    # Alerting Configuration
+    ALERTING_ENABLED: bool = os.getenv('ALERTING_ENABLED', 'true').lower() == 'true'
+    SLACK_WEBHOOK_URL: Optional[str] = os.getenv('SLACK_WEBHOOK_URL')
+
+    # Cache Configuration
+    CACHE_ENABLED: bool = os.getenv('CACHE_ENABLED', 'true').lower() == 'true'
+    CACHE_DEFAULT_TTL: int = int(os.getenv('CACHE_DEFAULT_TTL', 300))  # 5 minutes
+
+    # Database Pool Configuration
+    DB_POOL_SIZE: int = int(os.getenv('DB_POOL_SIZE', 10))
+    DB_POOL_MAX_OVERFLOW: int = int(os.getenv('DB_POOL_MAX_OVERFLOW', 20))
+    DB_POOL_TIMEOUT: int = int(os.getenv('DB_POOL_TIMEOUT', 30))
+
+    # Admin Configuration
+    ADMIN_API_KEY: Optional[str] = os.getenv('ADMIN_API_KEY')
+    ADMIN_ENABLED: bool = os.getenv('ADMIN_ENABLED', 'true').lower() == 'true'
 
     @classmethod
     def validate(cls) -> bool:

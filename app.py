@@ -22,7 +22,15 @@ from grpc_clients.lnd_client import LndClient
 from grpc_clients import get_grpc_manager, ServiceType
 from vtxo_manager import get_vtxo_manager, get_settlement_manager, initialize_vtxo_services, shutdown_vtxo_services
 
+# Import Phase 8 monitoring and operations components
+from monitoring import get_monitoring_system, initialize_monitoring, shutdown_monitoring
+from admin_api import admin_bp
+from cache_manager import initialize_performance_systems, shutdown_performance_systems, get_cache_manager
+
 app = Flask(__name__)
+
+# Register admin blueprint
+app.register_blueprint(admin_bp)
 
 # Initialize Lightning services
 lightning_manager = None
@@ -31,6 +39,10 @@ lightning_monitor = None
 # Initialize VTXO services
 vtxo_manager = None
 settlement_manager = None
+
+# Initialize monitoring and performance systems
+monitoring_system = None
+cache_manager = None
 
 def initialize_lightning_services():
     """Initialize Lightning services"""
@@ -82,6 +94,7 @@ def index():
 
 @app.route('/health')
 def health():
+    """Basic health check endpoint"""
     session = get_session()
     try:
         # Test database connection
@@ -118,6 +131,18 @@ def health():
         },
         'timestamp': datetime.now().isoformat()
     })
+
+@app.route('/health/comprehensive')
+def comprehensive_health():
+    """Comprehensive health check using monitoring system"""
+    try:
+        if monitoring_system:
+            health_status = monitoring_system.health_checker.comprehensive_health_check()
+            return jsonify(health_status)
+        else:
+            return jsonify({'error': 'Monitoring system not initialized'}), 503
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/queue-status')
 def queue_status():
@@ -220,6 +245,7 @@ def get_job(job_id):
 
 @app.route('/metrics')
 def get_system_metrics():
+    """Get basic system metrics from database"""
     session = get_session()
     try:
         # Get recent system metrics
@@ -247,6 +273,55 @@ def get_system_metrics():
         return jsonify({'error': str(e)}), 500
     finally:
         session.close()
+
+@app.route('/monitoring/stats')
+def get_monitoring_stats():
+    """Get comprehensive monitoring statistics"""
+    try:
+        if not monitoring_system:
+            return jsonify({'error': 'Monitoring system not initialized'}), 503
+
+        stats = monitoring_system.get_performance_stats()
+        return jsonify({
+            'monitoring_stats': stats,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/monitoring/alerts')
+def get_monitoring_alerts():
+    """Get active monitoring alerts"""
+    try:
+        if not monitoring_system:
+            return jsonify({'error': 'Monitoring system not initialized'}), 503
+
+        alerts = monitoring_system.alerting_system.get_active_alerts()
+        return jsonify({
+            'alerts': alerts,
+            'active_count': len(alerts),
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/monitoring/cache/stats')
+def get_cache_stats():
+    """Get cache performance statistics"""
+    try:
+        if not cache_manager:
+            return jsonify({'error': 'Cache manager not initialized'}), 503
+
+        stats = cache_manager.get_stats()
+        return jsonify({
+            'cache_stats': stats,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/heartbeats')
 def get_heartbeats():
@@ -2033,7 +2108,25 @@ def get_vtxo_stats():
 
 def initialize_services():
     """Initialize all services when the app starts"""
-    global nostr_client, redis_manager, event_handler, vtxo_manager, settlement_manager
+    global nostr_client, redis_manager, event_handler, vtxo_manager, settlement_manager, monitoring_system, cache_manager
+
+    # Initialize monitoring system first
+    try:
+        if os.getenv('MONITORING_AUTO_START', 'true').lower() == 'true':
+            monitoring_system = initialize_monitoring()
+            cache_manager = get_cache_manager()
+            print("✅ Monitoring system initialized")
+    except Exception as e:
+        print(f"❌ Failed to initialize monitoring system: {e}")
+
+    # Initialize performance optimization systems
+    try:
+        if os.getenv('PERFORMANCE_OPTIMIZATION', 'true').lower() == 'true':
+            perf_initialized = initialize_performance_systems()
+            if perf_initialized:
+                print("✅ Performance optimization systems initialized")
+    except Exception as e:
+        print(f"❌ Failed to initialize performance systems: {e}")
 
     # Auto-start Lightning service if configured
     if os.getenv('LIGHTNING_AUTO_START', 'true').lower() == 'true':
