@@ -16,8 +16,41 @@ from challenge_manager import get_challenge_manager
 from transaction_processor import get_transaction_processor
 from signing_orchestrator import get_signing_orchestrator
 from asset_manager import get_asset_manager
+from lightning_manager import LightningManager, LightningLiftRequest, LightningLandRequest
+from lightning_monitor import LightningMonitor
+from grpc_clients.lnd_client import LndClient
+from grpc_clients import get_grpc_manager, ServiceType
 
 app = Flask(__name__)
+
+# Initialize Lightning services
+lightning_manager = None
+lightning_monitor = None
+
+def initialize_lightning_services():
+    """Initialize Lightning services"""
+    global lightning_manager, lightning_monitor
+
+    try:
+        # Get LND client from gRPC manager
+        grpc_manager = get_grpc_manager()
+        lnd_client = grpc_manager.get_client(ServiceType.LND)
+
+        if lnd_client:
+            lightning_manager = LightningManager(lnd_client)
+            lightning_monitor = LightningMonitor(lightning_manager)
+
+            # Start monitoring
+            lightning_monitor.start_monitoring()
+
+            print("✅ Lightning services initialized")
+            return True
+        else:
+            print("❌ LND client not available")
+            return False
+    except Exception as e:
+        print(f"❌ Failed to initialize Lightning services: {e}")
+        return False
 
 # Use REDIS_URL environment variable or fallback to default
 redis_url = os.getenv('REDIS_URL', 'redis://redis:6379/0')
@@ -1328,9 +1361,355 @@ def get_reserve_requirements(asset_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# Lightning API Endpoints
+
+@app.route('/lightning/lift', methods=['POST'])
+def create_lightning_lift():
+    """Create a Lightning lift (on-ramp) operation"""
+    try:
+        if not lightning_manager:
+            return jsonify({'error': 'Lightning services not available'}), 503
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        # Validate required fields
+        required_fields = ['user_pubkey', 'asset_id', 'amount_sats']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+
+        # Create lift request
+        lift_request = LightningLiftRequest(
+            user_pubkey=data['user_pubkey'],
+            asset_id=data['asset_id'],
+            amount_sats=int(data['amount_sats']),
+            memo=data.get('memo', '')
+        )
+
+        # Process the lift
+        result = lightning_manager.create_lightning_lift(lift_request)
+
+        if result.success:
+            return jsonify({
+                'success': True,
+                'operation_id': result.operation_id,
+                'payment_hash': result.payment_hash,
+                'bolt11_invoice': result.bolt11_invoice,
+                'details': result.details,
+                'timestamp': datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.error,
+                'timestamp': datetime.now().isoformat()
+            }), 400
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/lightning/land', methods=['POST'])
+def process_lightning_land():
+    """Process a Lightning land (off-ramp) operation"""
+    try:
+        if not lightning_manager:
+            return jsonify({'error': 'Lightning services not available'}), 503
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        # Validate required fields
+        required_fields = ['user_pubkey', 'asset_id', 'amount_sats', 'lightning_invoice']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+
+        # Create land request
+        land_request = LightningLandRequest(
+            user_pubkey=data['user_pubkey'],
+            asset_id=data['asset_id'],
+            amount_sats=int(data['amount_sats']),
+            lightning_invoice=data['lightning_invoice']
+        )
+
+        # Process the land
+        result = lightning_manager.process_lightning_land(land_request)
+
+        if result.success:
+            return jsonify({
+                'success': True,
+                'operation_id': result.operation_id,
+                'payment_hash': result.payment_hash,
+                'bolt11_invoice': result.bolt11_invoice,
+                'details': result.details,
+                'timestamp': datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.error,
+                'timestamp': datetime.now().isoformat()
+            }), 400
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/lightning/invoices/<payment_hash>')
+def get_invoice_status(payment_hash):
+    """Get the status of a Lightning invoice"""
+    try:
+        if not lightning_manager:
+            return jsonify({'error': 'Lightning services not available'}), 503
+
+        status = lightning_manager.check_invoice_status(payment_hash)
+
+        if 'error' in status:
+            return jsonify({'error': status['error']}), 404
+
+        return jsonify({
+            'invoice_status': status,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/lightning/pay/<payment_hash>', methods=['POST'])
+def pay_lightning_invoice(payment_hash):
+    """Pay a Lightning invoice (for land operations)"""
+    try:
+        if not lightning_manager:
+            return jsonify({'error': 'Lightning services not available'}), 503
+
+        result = lightning_manager.pay_lightning_invoice(payment_hash)
+
+        if result.success:
+            return jsonify({
+                'success': True,
+                'operation_id': result.operation_id,
+                'payment_hash': result.payment_hash,
+                'details': result.details,
+                'timestamp': datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.error,
+                'timestamp': datetime.now().isoformat()
+            }), 400
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/lightning/balances')
+def get_lightning_balances():
+    """Get Lightning balance information"""
+    try:
+        if not lightning_manager:
+            return jsonify({'error': 'Lightning services not available'}), 503
+
+        balances = lightning_manager.get_lightning_balances()
+
+        if 'error' in balances:
+            return jsonify({'error': balances['error']}), 500
+
+        return jsonify({
+            'lightning_balances': balances,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/lightning/channels')
+def list_lightning_channels():
+    """List Lightning channels"""
+    try:
+        if not lightning_manager:
+            return jsonify({'error': 'Lightning services not available'}), 503
+
+        lnd_client = lightning_manager.lnd_client
+        channels = lnd_client.list_channels()
+
+        return jsonify({
+            'channels': [
+                {
+                    'channel_id': channel.channel_id,
+                    'remote_pubkey': channel.remote_pubkey,
+                    'capacity': channel.capacity,
+                    'local_balance': channel.local_balance,
+                    'remote_balance': channel.remote_balance,
+                    'private': channel.private,
+                    'active': channel.active,
+                    'funding_txid': channel.funding_txid
+                }
+                for channel in channels
+            ],
+            'count': len(channels),
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/lightning/fees/estimate/<int:amount_sats>')
+def estimate_lightning_fees(amount_sats):
+    """Estimate Lightning fees for a given amount"""
+    try:
+        if not lightning_manager:
+            return jsonify({'error': 'Lightning services not available'}), 503
+
+        fees = lightning_manager.estimate_lightning_fees(amount_sats)
+
+        if 'error' in fees:
+            return jsonify({'error': fees['error']}), 500
+
+        return jsonify({
+            'fee_estimate': fees,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/lightning/activity/<user_pubkey>')
+def get_user_lightning_activity(user_pubkey):
+    """Get user's Lightning activity history"""
+    try:
+        if not lightning_manager:
+            return jsonify({'error': 'Lightning services not available'}), 503
+
+        limit = request.args.get('limit', 50, type=int)
+        activity = lightning_manager.get_user_lightning_activity(user_pubkey, limit)
+
+        return jsonify({
+            'user_activity': activity,
+            'user_pubkey': user_pubkey,
+            'count': len(activity),
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/lightning/statistics')
+def get_lightning_statistics():
+    """Get Lightning operation statistics"""
+    try:
+        if not lightning_monitor:
+            return jsonify({'error': 'Lightning monitor not available'}), 503
+
+        hours = request.args.get('hours', 24, type=int)
+        stats = lightning_monitor.get_lightning_statistics(hours)
+
+        if 'error' in stats:
+            return jsonify({'error': stats['error']}), 500
+
+        return jsonify({
+            'lightning_statistics': stats,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/lightning/monitor/health')
+def get_lightning_monitor_health():
+    """Get Lightning monitor health status"""
+    try:
+        if not lightning_monitor:
+            return jsonify({'error': 'Lightning monitor not available'}), 503
+
+        health = lightning_monitor.health_check()
+
+        return jsonify({
+            'monitor_health': health,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/lightning/invoices')
+def list_lightning_invoices():
+    """List Lightning invoices with filtering"""
+    try:
+        if not lightning_manager:
+            return jsonify({'error': 'Lightning services not available'}), 503
+
+        lnd_client = lightning_manager.lnd_client
+        pending_only = request.args.get('pending_only', 'false').lower() == 'true'
+        invoices = lnd_client.list_invoices(pending_only)
+
+        return jsonify({
+            'invoices': [
+                {
+                    'payment_hash': invoice.payment_hash,
+                    'payment_request': invoice.payment_request,
+                    'value': invoice.value,
+                    'settled': invoice.settled,
+                    'creation_date': invoice.creation_date.isoformat(),
+                    'expiry': invoice.expiry,
+                    'memo': invoice.memo
+                }
+                for invoice in invoices
+            ],
+            'count': len(invoices),
+            'pending_only': pending_only,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/lightning/payments')
+def list_lightning_payments():
+    """List Lightning payments"""
+    try:
+        if not lightning_manager:
+            return jsonify({'error': 'Lightning services not available'}), 503
+
+        lnd_client = lightning_manager.lnd_client
+        payments = lnd_client.list_payments()
+
+        return jsonify({
+            'payments': [
+                {
+                    'payment_hash': payment.payment_hash,
+                    'value': payment.value,
+                    'fee': payment.fee,
+                    'payment_preimage': payment.payment_preimage,
+                    'payment_request': payment.payment_request,
+                    'status': payment.status,
+                    'creation_time': payment.creation_time.isoformat(),
+                    'completion_time': payment.completion_time.isoformat() if payment.completion_time else None
+                }
+                for payment in payments
+            ],
+            'count': len(payments),
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 def initialize_services():
     """Initialize all services when the app starts"""
     global nostr_client, redis_manager, event_handler
+
+    # Auto-start Lightning service if configured
+    if os.getenv('LIGHTNING_AUTO_START', 'true').lower() == 'true':
+        try:
+            lightning_initialized = initialize_lightning_services()
+            if lightning_initialized:
+                print("✅ Lightning service auto-started")
+            else:
+                print("❌ Lightning service failed to start")
+        except Exception as e:
+            print(f"❌ Failed to auto-start Lightning service: {e}")
 
     # Auto-start Nostr service if configured
     if os.getenv('NOSTR_AUTO_START', 'false').lower() == 'true':
