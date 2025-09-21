@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import os
 import json
 from models import JobLog, SystemMetrics, Heartbeat, get_session
+from grpc_clients import get_grpc_manager, ServiceType
 
 app = Flask(__name__)
 
@@ -38,10 +39,19 @@ def health():
     finally:
         session.close()
 
+    # Check gRPC services
+    grpc_manager = get_grpc_manager()
+    grpc_health = grpc_manager.health_check_all()
+
     return jsonify({
         'status': 'healthy',
         'redis_connected': redis_conn.ping(),
         'database_connected': db_connected,
+        'grpc_services': {
+            'arkd': grpc_health.get(ServiceType.ARKD, False),
+            'tapd': grpc_health.get(ServiceType.TAPD, False),
+            'lnd': grpc_health.get(ServiceType.LND, False)
+        },
         'timestamp': datetime.now().isoformat()
     })
 
@@ -202,6 +212,88 @@ def get_heartbeats():
     finally:
         session.close()
 
+@app.route('/grpc/arkd/info')
+def get_arkd_info():
+    """Get ARKD service information"""
+    try:
+        grpc_manager = get_grpc_manager()
+        arkd_client = grpc_manager.get_client(ServiceType.ARKD)
+
+        if not arkd_client:
+            return jsonify({'error': 'ARKD client not available'}), 503
+
+        network_info = arkd_client.get_network_info()
+        return jsonify({
+            'service': 'arkd',
+            'connected': True,
+            'network_info': network_info,
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/grpc/tapd/balances')
+def get_tapd_balances():
+    """Get TAPD asset balances"""
+    try:
+        grpc_manager = get_grpc_manager()
+        tapd_client = grpc_manager.get_client(ServiceType.TAPD)
+
+        if not tapd_client:
+            return jsonify({'error': 'TAPD client not available'}), 503
+
+        balances = tapd_client.get_asset_balances()
+        return jsonify({
+            'service': 'tapd',
+            'connected': True,
+            'balances': balances,
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/grpc/lnd/balances')
+def get_lnd_balances():
+    """Get LND balances"""
+    try:
+        grpc_manager = get_grpc_manager()
+        lnd_client = grpc_manager.get_client(ServiceType.LND)
+
+        if not lnd_client:
+            return jsonify({'error': 'LND client not available'}), 503
+
+        balances = lnd_client.get_total_balance()
+        return jsonify({
+            'service': 'lnd',
+            'connected': True,
+            'balances': balances,
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/grpc/reconnect/<service>')
+def reconnect_grpc_service(service):
+    """Reconnect to a specific gRPC service"""
+    try:
+        grpc_manager = get_grpc_manager()
+
+        if service == 'arkd':
+            grpc_manager.reconnect(ServiceType.ARKD)
+        elif service == 'tapd':
+            grpc_manager.reconnect(ServiceType.TAPD)
+        elif service == 'lnd':
+            grpc_manager.reconnect(ServiceType.LND)
+        else:
+            return jsonify({'error': 'Invalid service name'}), 400
+
+        return jsonify({
+            'message': f'Reconnected to {service}',
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/stats')
 def get_stats():
     session = get_session()
@@ -221,6 +313,10 @@ def get_stats():
 
         # Get latest metrics
         latest_metrics = session.query(SystemMetrics).order_by(SystemMetrics.timestamp.desc()).first()
+
+        # Get gRPC service health
+        grpc_manager = get_grpc_manager()
+        grpc_health = grpc_manager.health_check_all()
 
         return jsonify({
             'jobs': {
@@ -243,6 +339,11 @@ def get_stats():
                 'queued_jobs': q.count,
                 'scheduled_jobs': len(scheduler.get_jobs()),
                 'worker_count': len(redis_conn.smembers('rq:workers'))
+            },
+            'grpc_services': {
+                'arkd': grpc_health.get(ServiceType.ARKD, False),
+                'tapd': grpc_health.get(ServiceType.TAPD, False),
+                'lnd': grpc_health.get(ServiceType.LND, False)
             },
             'timestamp': datetime.now().isoformat()
         })

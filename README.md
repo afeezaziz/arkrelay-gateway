@@ -10,6 +10,9 @@ A Flask-based gateway service for managing background tasks, scheduling, and sys
 - **Database Integration**: MariaDB with SQLAlchemy ORM for persistent storage
 - **System Monitoring**: Real-time system metrics and heartbeat monitoring
 - **Job Tracking**: Comprehensive logging and status tracking for all tasks
+- **gRPC Client Layer**: Unified interface for ARKD, TAPD, and LND daemon communication
+- **Circuit Breaker**: Fault tolerance and graceful degradation for gRPC services
+- **Service Health Monitoring**: Real-time health checks for all backend daemons
 
 ## Architecture
 
