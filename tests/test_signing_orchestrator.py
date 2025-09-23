@@ -7,6 +7,9 @@ from core.signing_orchestrator import SigningOrchestrator, SigningCeremonyError,
 from core.session_manager import get_session_manager, SessionState
 from core.challenge_manager import get_challenge_manager
 
+# Import test database setup to enable patching
+from tests.test_database_setup import *
+
 class TestSigningOrchestrator:
     """Test cases for SigningOrchestrator"""
 

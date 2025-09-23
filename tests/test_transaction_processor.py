@@ -13,6 +13,9 @@ TEST_DATABASE_URL = "sqlite:///:memory:"
 test_engine = create_engine(TEST_DATABASE_URL)
 TestSession = sessionmaker(bind=test_engine)
 
+# Import test database setup to enable patching
+from tests.test_database_setup import *
+
 def setup_test_db():
     """Setup test database"""
     Base.metadata.create_all(test_engine)
