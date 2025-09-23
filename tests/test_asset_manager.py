@@ -2,9 +2,10 @@ import pytest
 import json
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
-from core.models import Asset, AssetBalance, Vtxo
+from core.models import Asset, AssetBalance, Vtxo, get_session
 from core.asset_manager import AssetManager, AssetError, InsufficientAssetError
 from sqlalchemy import func
+from grpc_clients import ServiceType
 from tests.test_database_setup import (
     test_db_session, test_engine, test_tables, create_test_asset, create_test_balance, create_test_vtxo,
     sample_asset_data, sample_balance_data, sample_vtxo_data
@@ -27,19 +28,19 @@ class TestAssetManager:
     @pytest.fixture
     def sample_asset(self, test_db_session):
         """Create a sample asset"""
-        return create_test_asset(test_db_session, sample_asset_data())
+        return create_test_asset(test_db_session)
 
     @pytest.fixture
     def sample_balance(self, test_db_session, sample_asset):
         """Create a sample asset balance"""
-        return create_test_balance(test_db_session, sample_balance_data())
+        return create_test_balance(test_db_session)
 
     @pytest.fixture
     def sample_vtxo(self, test_db_session, sample_asset):
         """Create a sample VTXO"""
-        return create_test_vtxo(test_db_session, sample_vtxo_data())
+        return create_test_vtxo(test_db_session)
 
-    def test_create_asset_success(self, asset_manager, test_db_session, setup_test_tables, patch_get_session):
+    def test_create_asset_success(self, asset_manager, test_db_session):
         """Test successful asset creation"""
         result = asset_manager.create_asset(
             asset_id="TEST_UNIT",
@@ -107,18 +108,14 @@ class TestAssetManager:
     def test_list_assets_active_only(self, asset_manager, sample_asset, test_db_session):
         """Test listing only active assets"""
         # Create inactive asset
-        db_session = get_session()
-        try:
-            inactive_asset = Asset(
-                asset_id="INACTIVE",
-                name="Inactive Asset",
-                ticker="INACTIVE",
-                is_active=False
-            )
-            db_session.add(inactive_asset)
-            db_session.commit()
-        finally:
-            db_session.close()
+        inactive_asset = Asset(
+            asset_id="INACTIVE",
+            name="Inactive Asset",
+            ticker="INACTIVE",
+            is_active=False
+        )
+        test_db_session.add(inactive_asset)
+        test_db_session.commit()
 
         assets = asset_manager.list_assets(active_only=True)
 

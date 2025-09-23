@@ -57,7 +57,6 @@ def mock_db_session():
     return mock_session
 
 
-@pytest.fixture
 def sample_asset_data():
     """Sample asset data for testing"""
     return {
@@ -72,7 +71,6 @@ def sample_asset_data():
     }
 
 
-@pytest.fixture
 def sample_balance_data():
     """Sample balance data for testing"""
     return {
@@ -83,7 +81,6 @@ def sample_balance_data():
     }
 
 
-@pytest.fixture
 def sample_vtxo_data():
     """Sample VTXO data for testing"""
     return {
@@ -99,7 +96,6 @@ def sample_vtxo_data():
     }
 
 
-@pytest.fixture
 def sample_signing_session_data():
     """Sample signing session data for testing"""
     return {
@@ -113,7 +109,6 @@ def sample_signing_session_data():
     }
 
 
-@pytest.fixture
 def sample_signing_challenge_data():
     """Sample signing challenge data for testing"""
     return {
@@ -125,7 +120,6 @@ def sample_signing_challenge_data():
     }
 
 
-@pytest.fixture
 def sample_transaction_data():
     """Sample transaction data for testing"""
     return {
@@ -304,7 +298,8 @@ def patch_get_session(test_db_session):
     """Patch get_session to use test database"""
     from unittest.mock import patch
 
-    with patch('core.models.get_session', return_value=test_db_session):
+    with patch('core.models.get_session', return_value=test_db_session), \
+         patch('core.asset_manager.get_session', return_value=test_db_session):
         yield
 
 
