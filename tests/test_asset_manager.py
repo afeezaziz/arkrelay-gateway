@@ -2,9 +2,19 @@ import pytest
 import json
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
-from core.models import Asset, AssetBalance, Vtxo, get_session
+from core.models import Asset, AssetBalance, Vtxo
 from core.asset_manager import AssetManager, AssetError, InsufficientAssetError
 from sqlalchemy import func
+from tests.test_database_setup import (
+    test_db_session, test_engine, test_tables, create_test_asset, create_test_balance, create_test_vtxo,
+    sample_asset_data, sample_balance_data, sample_vtxo_data
+)
+
+# Import the test database setup fixtures
+from tests.test_database_setup import test_tables as setup_test_tables
+
+# Import the patch_get_session fixture
+from tests.test_database_setup import patch_get_session
 
 class TestAssetManager:
     """Test cases for AssetManager"""
@@ -15,68 +25,21 @@ class TestAssetManager:
         return AssetManager()
 
     @pytest.fixture
-    def sample_asset(self):
+    def sample_asset(self, test_db_session):
         """Create a sample asset"""
-        db_session = get_session()
-        try:
-            asset = Asset(
-                asset_id="BTC",
-                name="Bitcoin",
-                ticker="BTC",
-                asset_type="normal",
-                decimal_places=8,
-                total_supply=2100000000000000,
-                is_active=True
-            )
-            db_session.add(asset)
-            db_session.commit()
-            db_session.refresh(asset)
-            return asset
-        finally:
-            db_session.close()
+        return create_test_asset(test_db_session, sample_asset_data())
 
     @pytest.fixture
-    def sample_balance(self, sample_asset):
+    def sample_balance(self, test_db_session, sample_asset):
         """Create a sample asset balance"""
-        db_session = get_session()
-        try:
-            balance = AssetBalance(
-                user_pubkey="test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
-                asset_id="BTC",
-                balance=5000,
-                reserved_balance=1000
-            )
-            db_session.add(balance)
-            db_session.commit()
-            db_session.refresh(balance)
-            return balance
-        finally:
-            db_session.close()
+        return create_test_balance(test_db_session, sample_balance_data())
 
     @pytest.fixture
-    def sample_vtxo(self, sample_asset):
+    def sample_vtxo(self, test_db_session, sample_asset):
         """Create a sample VTXO"""
-        db_session = get_session()
-        try:
-            vtxo = Vtxo(
-                vtxo_id="test_vtxo_id",
-                txid="test_txid",
-                vout=0,
-                amount_sats=1000,
-                script_pubkey=b"test_script_pubkey",
-                asset_id="BTC",
-                user_pubkey="test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
-                status="available",
-                expires_at=datetime.utcnow() + timedelta(hours=24)
-            )
-            db_session.add(vtxo)
-            db_session.commit()
-            db_session.refresh(vtxo)
-            return vtxo
-        finally:
-            db_session.close()
+        return create_test_vtxo(test_db_session, sample_vtxo_data())
 
-    def test_create_asset_success(self, asset_manager):
+    def test_create_asset_success(self, asset_manager, test_db_session, setup_test_tables, patch_get_session):
         """Test successful asset creation"""
         result = asset_manager.create_asset(
             asset_id="TEST_UNIT",
@@ -98,15 +61,11 @@ class TestAssetManager:
         assert result['asset_metadata'] == {"description": "Test asset for unit testing"}
 
         # Verify asset was created in database
-        db_session = get_session()
-        try:
-            asset = db_session.query(Asset).filter_by(asset_id="TEST").first()
-            assert asset is not None
-            assert asset.name == "Test Asset"
-        finally:
-            db_session.close()
+        asset = test_db_session.query(Asset).filter_by(asset_id="TEST_UNIT").first()
+        assert asset is not None
+        assert asset.name == "Test Asset Unit"
 
-    def test_create_asset_already_exists(self, asset_manager, sample_asset):
+    def test_create_asset_already_exists(self, asset_manager, sample_asset, test_db_session):
         """Test creating asset that already exists"""
         with pytest.raises(AssetError, match="already exists"):
             asset_manager.create_asset(
@@ -115,7 +74,7 @@ class TestAssetManager:
                 ticker="BTC"
             )
 
-    def test_get_asset_info_success(self, asset_manager, sample_asset):
+    def test_get_asset_info_success(self, asset_manager, sample_asset, test_db_session):
         """Test getting asset information"""
         info = asset_manager.get_asset_info("BTC")
 
@@ -127,13 +86,13 @@ class TestAssetManager:
         assert info['total_supply'] == 2100000000000000
         assert info['is_active'] is True
 
-    def test_get_asset_info_not_found(self, asset_manager):
+    def test_get_asset_info_not_found(self, asset_manager, test_db_session):
         """Test getting info for non-existent asset"""
         info = asset_manager.get_asset_info("NONEXISTENT")
         assert 'error' in info
         assert 'not found' in info['error']
 
-    def test_list_assets_all(self, asset_manager, sample_asset):
+    def test_list_assets_all(self, asset_manager, sample_asset, test_db_session):
         """Test listing all assets"""
         # Create another asset
         asset_manager.create_asset("ETH", "Ethereum", "ETH")
@@ -145,7 +104,7 @@ class TestAssetManager:
         assert "BTC" in asset_ids
         assert "ETH" in asset_ids
 
-    def test_list_assets_active_only(self, asset_manager, sample_asset):
+    def test_list_assets_active_only(self, asset_manager, sample_asset, test_db_session):
         """Test listing only active assets"""
         # Create inactive asset
         db_session = get_session()
@@ -167,7 +126,7 @@ class TestAssetManager:
         assert "BTC" in asset_ids
         assert "INACTIVE" not in asset_ids
 
-    def test_get_user_balance_success(self, asset_manager, sample_asset, sample_balance):
+    def test_get_user_balance_success(self, asset_manager, sample_asset, sample_balance, test_db_session):
         """Test getting user balance for specific asset"""
         balance = asset_manager.get_user_balance(
             "test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
@@ -180,7 +139,7 @@ class TestAssetManager:
         assert balance['reserved_balance'] == 1000
         assert balance['available_balance'] == 4000
 
-    def test_get_user_balance_not_found(self, asset_manager, sample_asset):
+    def test_get_user_balance_not_found(self, asset_manager, sample_asset, test_db_session):
         """Test getting balance for user with no balance"""
         balance = asset_manager.get_user_balance(
             "nonexistent_user_pubkey",
@@ -191,7 +150,7 @@ class TestAssetManager:
         assert balance['reserved_balance'] == 0
         assert balance['available_balance'] == 0
 
-    def test_get_user_balances(self, asset_manager, sample_asset, sample_balance):
+    def test_get_user_balances(self, asset_manager, sample_asset, sample_balance, test_db_session):
         """Test getting all balances for a user"""
         # Create another asset and balance
         asset_manager.create_asset("ETH", "Ethereum", "ETH")
@@ -212,7 +171,7 @@ class TestAssetManager:
         assert balance_dict["BTC"]['balance'] == 5000
         assert balance_dict["ETH"]['balance'] == 2000
 
-    def test_mint_assets_success(self, asset_manager, sample_asset):
+    def test_mint_assets_success(self, asset_manager, sample_asset, test_db_session):
         """Test successful asset minting"""
         result = asset_manager.mint_assets(
             "test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
@@ -235,7 +194,7 @@ class TestAssetManager:
         assert balance['balance'] == 1000
         assert balance['reserved_balance'] == 500
 
-    def test_mint_assets_existing_balance(self, asset_manager, sample_asset, sample_balance):
+    def test_mint_assets_existing_balance(self, asset_manager, sample_asset, sample_balance, test_db_session):
         """Test minting assets to existing balance"""
         result = asset_manager.mint_assets(
             "test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
@@ -255,7 +214,7 @@ class TestAssetManager:
         assert balance['balance'] == 7000
         assert balance['reserved_balance'] == 1500  # 1000 + 500
 
-    def test_mint_assets_asset_not_found(self, asset_manager):
+    def test_mint_assets_asset_not_found(self, asset_manager, test_db_session):
         """Test minting assets for non-existent asset"""
         with pytest.raises(AssetError, match="not found or inactive"):
             asset_manager.mint_assets(
@@ -264,7 +223,7 @@ class TestAssetManager:
                 1000
             )
 
-    def test_mint_assets_exceeds_supply_limit(self, asset_manager, sample_asset):
+    def test_mint_assets_exceeds_supply_limit(self, asset_manager, sample_asset, test_db_session):
         """Test minting assets that would exceed supply limit"""
         # Create asset with limited supply
         asset_manager.create_asset("LIMITED", "Limited Asset", "LIMITED", total_supply=1000)
@@ -276,7 +235,7 @@ class TestAssetManager:
                 1500  # More than total supply
             )
 
-    def test_transfer_assets_success(self, asset_manager, sample_asset, sample_balance):
+    def test_transfer_assets_success(self, asset_manager, sample_asset, sample_balance, test_db_session):
         """Test successful asset transfer"""
         # Create recipient balance
         asset_manager.mint_assets(
@@ -299,7 +258,7 @@ class TestAssetManager:
         assert result['sender_balance'] == 3000  # 5000 - 2000
         assert result['recipient_balance'] == 3000  # 1000 + 2000
 
-    def test_transfer_assets_insufficient_balance(self, asset_manager, sample_asset, sample_balance):
+    def test_transfer_assets_insufficient_balance(self, asset_manager, sample_asset, sample_balance, test_db_session):
         """Test transferring with insufficient balance"""
         with pytest.raises(InsufficientAssetError, match="Insufficient balance"):
             asset_manager.transfer_assets(
@@ -309,19 +268,15 @@ class TestAssetManager:
                 10000  # More than available balance
             )
 
-    def test_transfer_assets_insufficient_available_balance(self, asset_manager, sample_asset, sample_balance):
+    def test_transfer_assets_insufficient_available_balance(self, asset_manager, sample_asset, sample_balance, test_db_session):
         """Test transferring with insufficient available balance"""
         # All balance is reserved (5000 balance, 5000 reserved = 0 available)
-        db_session = get_session()
-        try:
-            balance = db_session.query(AssetBalance).filter_by(
-                user_pubkey="test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
-                asset_id="BTC"
-            ).first()
-            balance.reserved_balance = 5000
-            db_session.commit()
-        finally:
-            db_session.close()
+        balance = test_db_session.query(AssetBalance).filter_by(
+            user_pubkey="test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
+            asset_id="BTC"
+        ).first()
+        balance.reserved_balance = 5000
+        test_db_session.commit()
 
         with pytest.raises(InsufficientAssetError, match="Insufficient available balance"):
             asset_manager.transfer_assets(
@@ -331,7 +286,7 @@ class TestAssetManager:
                 1000
             )
 
-    def test_transfer_assets_create_recipient_balance(self, asset_manager, sample_asset, sample_balance):
+    def test_transfer_assets_create_recipient_balance(self, asset_manager, sample_asset, sample_balance, test_db_session):
         """Test transferring creates recipient balance if doesn't exist"""
         result = asset_manager.transfer_assets(
             "test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
@@ -349,7 +304,7 @@ class TestAssetManager:
         )
         assert balance['balance'] == 1500
 
-    def test_manage_vtxos_list(self, asset_manager, sample_asset, sample_vtxo):
+    def test_manage_vtxos_list(self, asset_manager, sample_asset, sample_vtxo, test_db_session):
         """Test listing VTXOs for a user"""
         result = asset_manager.manage_vtxos(
             "test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
@@ -361,7 +316,7 @@ class TestAssetManager:
         assert result['total_available'] > 0
         assert result['user_pubkey'] == "test_user_..."
 
-    def test_manage_vtxos_list_with_asset_filter(self, asset_manager, sample_asset, sample_vtxo):
+    def test_manage_vtxos_list_with_asset_filter(self, asset_manager, sample_asset, sample_vtxo, test_db_session):
         """Test listing VTXOs with asset filter"""
         result = asset_manager.manage_vtxos(
             "test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
@@ -373,7 +328,7 @@ class TestAssetManager:
         for vtxo in result['vtxos']:
             assert vtxo['asset_id'] == "BTC"
 
-    def test_manage_vtxos_create(self, asset_manager, sample_asset):
+    def test_manage_vtxos_create(self, asset_manager, sample_asset, test_db_session):
         """Test creating a VTXO"""
         result = asset_manager.manage_vtxos(
             "test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
@@ -387,7 +342,7 @@ class TestAssetManager:
         assert result['asset_id'] == "BTC"
         assert result['status'] == "available"
 
-    def test_manage_vtxos_assign(self, asset_manager, sample_asset, sample_vtxo):
+    def test_manage_vtxos_assign(self, asset_manager, sample_asset, sample_vtxo, test_db_session):
         """Test assigning a VTXO"""
         result = asset_manager.manage_vtxos(
             "test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
@@ -399,14 +354,10 @@ class TestAssetManager:
         assert result['vtxo_id'] == "test_vtxo_id"
 
         # Verify VTXO status was updated
-        db_session = get_session()
-        try:
-            vtxo = db_session.query(Vtxo).filter_by(vtxo_id="test_vtxo_id").first()
-            assert vtxo.status == "assigned"
-        finally:
-            db_session.close()
+        vtxo = test_db_session.query(Vtxo).filter_by(vtxo_id="test_vtxo_id").first()
+        assert vtxo.status == "assigned"
 
-    def test_manage_vtxos_assign_not_found(self, asset_manager):
+    def test_manage_vtxos_assign_not_found(self, asset_manager, test_db_session):
         """Test assigning non-existent VTXO"""
         with pytest.raises(AssetError, match="not found"):
             asset_manager.manage_vtxos(
@@ -415,16 +366,12 @@ class TestAssetManager:
                 vtxo_id="nonexistent_vtxo_id"
             )
 
-    def test_manage_vtxos_assign_not_available(self, asset_manager, sample_asset, sample_vtxo):
+    def test_manage_vtxos_assign_not_available(self, asset_manager, sample_asset, sample_vtxo, test_db_session):
         """Test assigning VTXO that's not available"""
         # Mark VTXO as spent
-        db_session = get_session()
-        try:
-            vtxo = db_session.query(Vtxo).filter_by(vtxo_id="test_vtxo_id").first()
-            vtxo.status = "spent"
-            db_session.commit()
-        finally:
-            db_session.close()
+        vtxo = test_db_session.query(Vtxo).filter_by(vtxo_id="test_vtxo_id").first()
+        vtxo.status = "spent"
+        test_db_session.commit()
 
         with pytest.raises(AssetError, match="is not available"):
             asset_manager.manage_vtxos(
@@ -433,7 +380,7 @@ class TestAssetManager:
                 vtxo_id="test_vtxo_id"
             )
 
-    def test_manage_vtxos_spend(self, asset_manager, sample_asset, sample_vtxo):
+    def test_manage_vtxos_spend(self, asset_manager, sample_asset, sample_vtxo, test_db_session):
         """Test spending a VTXO"""
         result = asset_manager.manage_vtxos(
             "test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
@@ -446,15 +393,11 @@ class TestAssetManager:
         assert result['spending_txid'] == "test_spending_txid"
 
         # Verify VTXO status was updated
-        db_session = get_session()
-        try:
-            vtxo = db_session.query(Vtxo).filter_by(vtxo_id="test_vtxo_id").first()
-            assert vtxo.status == "spent"
-            assert vtxo.spending_txid == "test_spending_txid"
-        finally:
-            db_session.close()
+        vtxo = test_db_session.query(Vtxo).filter_by(vtxo_id="test_vtxo_id").first()
+        assert vtxo.status == "spent"
+        assert vtxo.spending_txid == "test_spending_txid"
 
-    def test_get_asset_stats(self, asset_manager, sample_asset, sample_balance):
+    def test_get_asset_stats(self, asset_manager, sample_asset, sample_balance, test_db_session):
         """Test getting asset statistics"""
         # Create additional assets and balances for more comprehensive stats
         asset_manager.create_asset("ETH", "Ethereum", "ETH")
@@ -472,26 +415,22 @@ class TestAssetManager:
         assert stats['balances']['total_balances'] >= 1
         assert stats['balances']['total_balance_sum'] >= 5000
 
-    def test_cleanup_expired_vtxos(self, asset_manager, sample_asset):
+    def test_cleanup_expired_vtxos(self, asset_manager, sample_asset, test_db_session):
         """Test cleaning up expired VTXOs"""
         # Create expired VTXO
-        db_session = get_session()
-        try:
-            expired_vtxo = Vtxo(
-                vtxo_id="expired_vtxo_id",
-                txid="expired_txid",
-                vout=0,
-                amount_sats=500,
-                script_pubkey=b"expired_script",
-                asset_id="BTC",
-                user_pubkey="test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
-                status="available",
-                expires_at=datetime.utcnow() - timedelta(hours=1)  # Expired
-            )
-            db_session.add(expired_vtxo)
-            db_session.commit()
-        finally:
-            db_session.close()
+        expired_vtxo = Vtxo(
+            vtxo_id="expired_vtxo_id",
+            txid="expired_txid",
+            vout=0,
+            amount_sats=500,
+            script_pubkey=b"expired_script",
+            asset_id="BTC",
+            user_pubkey="test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
+            status="available",
+            expires_at=datetime.utcnow() - timedelta(hours=1)  # Expired
+        )
+        test_db_session.add(expired_vtxo)
+        test_db_session.commit()
 
         result = asset_manager.cleanup_expired_vtxos()
 
@@ -499,14 +438,10 @@ class TestAssetManager:
         assert result['total_amount_sats'] > 0
 
         # Verify VTXO was marked as expired
-        db_session = get_session()
-        try:
-            vtxo = db_session.query(Vtxo).filter_by(vtxo_id="expired_vtxo_id").first()
-            assert vtxo.status == "expired"
-        finally:
-            db_session.close()
+        vtxo = test_db_session.query(Vtxo).filter_by(vtxo_id="expired_vtxo_id").first()
+        assert vtxo.status == "expired"
 
-    def test_get_reserve_requirements(self, asset_manager, sample_asset, sample_balance):
+    def test_get_reserve_requirements(self, asset_manager, sample_asset, sample_balance, test_db_session):
         """Test getting reserve requirements"""
         reserve = asset_manager.get_reserve_requirements("BTC")
 
@@ -518,7 +453,7 @@ class TestAssetManager:
         assert reserve['reserve_deficit'] == 0  # No deficit (1000 >= 500)
         assert reserve['reserve_health'] == "good"
 
-    def test_get_reserve_requirements_deficit(self, asset_manager, sample_asset):
+    def test_get_reserve_requirements_deficit(self, asset_manager, sample_asset, test_db_session):
         """Test reserve requirements with deficit"""
         # Create balance with insufficient reserves
         asset_manager.mint_assets(
@@ -535,12 +470,12 @@ class TestAssetManager:
         assert reserve['reserve_deficit'] == 900
         assert reserve['reserve_health'] == "deficient"
 
-    def test_get_reserve_requirements_asset_not_found(self, asset_manager):
+    def test_get_reserve_requirements_asset_not_found(self, asset_manager, test_db_session):
         """Test reserve requirements for non-existent asset"""
         reserve = asset_manager.get_reserve_requirements("NONEXISTENT")
         assert 'error' in reserve
 
-    def test_unknown_vtxo_action(self, asset_manager):
+    def test_unknown_vtxo_action(self, asset_manager, test_db_session):
         """Test unknown VTXO action"""
         with pytest.raises(AssetError, match="Unknown VTXO action"):
             asset_manager.manage_vtxos(
@@ -570,7 +505,7 @@ class TestAssetManager:
         # Note: This may be None in test environment
         assert arkd_client is None or hasattr(arkd_client, 'health_check')
 
-    def test_database_session_management(self, asset_manager, sample_asset):
+    def test_database_session_management(self, asset_manager, sample_asset, test_db_session):
         """Test proper database session management"""
         # Test that sessions are properly closed
         with patch('core.asset_manager.get_session') as mock_get_session:
@@ -582,7 +517,7 @@ class TestAssetManager:
             # Session should be closed
             mock_session.close.assert_called_once()
 
-    def test_transaction_rollback_on_error(self, asset_manager):
+    def test_transaction_rollback_on_error(self, asset_manager, test_db_session):
         """Test transaction rollback on error"""
         # Mock session that raises exception during commit
         with patch('core.asset_manager.get_session') as mock_get_session:
@@ -599,7 +534,7 @@ class TestAssetManager:
             # Session should be closed
             mock_session.close.assert_called_once()
 
-    def test_concurrent_operations(self, asset_manager, sample_asset):
+    def test_concurrent_operations(self, asset_manager, sample_asset, test_db_session):
         """Test concurrent asset operations"""
         import threading
         import time
@@ -633,7 +568,7 @@ class TestAssetManager:
         assert len(errors) == 0
         assert len(results) == 5
 
-    def test_asset_validation(self, asset_manager):
+    def test_asset_validation(self, asset_manager, test_db_session):
         """Test asset input validation"""
         # Test invalid asset types
         with pytest.raises(Exception):
@@ -643,7 +578,7 @@ class TestAssetManager:
         with pytest.raises(Exception):
             asset_manager.create_asset("TEST", "Test", "TEST", decimal_places=-1)
 
-    def test_balance_validation(self, asset_manager, sample_asset):
+    def test_balance_validation(self, asset_manager, sample_asset, test_db_session):
         """Test balance validation"""
         # Test negative amounts
         with pytest.raises(Exception):
@@ -653,26 +588,22 @@ class TestAssetManager:
         with pytest.raises(Exception):
             asset_manager.transfer_assets("user1", "user2", "BTC", -100)
 
-    def test_vtxo_expiry_handling(self, asset_manager, sample_asset):
+    def test_vtxo_expiry_handling(self, asset_manager, sample_asset, test_db_session):
         """Test VTXO expiry handling"""
         # Create VTXO that's about to expire
-        db_session = get_session()
-        try:
-            almost_expired_vtxo = Vtxo(
-                vtxo_id="almost_expired_vtxo_id",
-                txid="almost_expired_txid",
-                vout=0,
-                amount_sats=1000,
-                script_pubkey=b"test_script",
-                asset_id="BTC",
-                user_pubkey="test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
-                status="available",
-                expires_at=datetime.utcnow() + timedelta(seconds=1)  # Almost expired
-            )
-            db_session.add(almost_expired_vtxo)
-            db_session.commit()
-        finally:
-            db_session.close()
+        almost_expired_vtxo = Vtxo(
+            vtxo_id="almost_expired_vtxo_id",
+            txid="almost_expired_txid",
+            vout=0,
+            amount_sats=1000,
+            script_pubkey=b"test_script",
+            asset_id="BTC",
+            user_pubkey="test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
+            status="available",
+            expires_at=datetime.utcnow() + timedelta(seconds=1)  # Almost expired
+        )
+        test_db_session.add(almost_expired_vtxo)
+        test_db_session.commit()
 
         # Wait for expiry
         import time
@@ -686,7 +617,7 @@ class TestAssetManager:
                 vtxo_id="almost_expired_vtxo_id"
             )
 
-    def test_asset_metadata_handling(self, asset_manager):
+    def test_asset_metadata_handling(self, asset_manager, test_db_session):
         """Test asset metadata handling"""
         metadata = {
             "description": "Test asset",
@@ -708,7 +639,7 @@ class TestAssetManager:
         info = asset_manager.get_asset_info("METADATA")
         assert info['metadata'] == metadata
 
-    def test_large_amount_handling(self, asset_manager, sample_asset):
+    def test_large_amount_handling(self, asset_manager, sample_asset, test_db_session):
         """Test handling of large amounts"""
         # Test with very large numbers
         large_amount = 10**18  # 1 billion BTC
@@ -726,7 +657,7 @@ class TestAssetManager:
         balance = asset_manager.get_user_balance("whale_user", "BTC")
         assert balance['balance'] == large_amount
 
-    def test_edge_case_empty_strings(self, asset_manager):
+    def test_edge_case_empty_strings(self, asset_manager, test_db_session):
         """Test edge cases with empty strings"""
         # Test empty asset ID
         with pytest.raises(Exception):
@@ -736,7 +667,7 @@ class TestAssetManager:
         with pytest.raises(Exception):
             asset_manager.get_user_balance("", "BTC")
 
-    def test_edge_case_zero_amounts(self, asset_manager, sample_asset):
+    def test_edge_case_zero_amounts(self, asset_manager, sample_asset, test_db_session):
         """Test edge cases with zero amounts"""
         # Test minting zero amount
         result = asset_manager.mint_assets("test_user", "BTC", 0)
@@ -747,7 +678,7 @@ class TestAssetManager:
         with pytest.raises(InsufficientAssetError):
             asset_manager.transfer_assets("user1", "user2", "BTC", 0)
 
-    def test_vtxo_id_uniqueness(self, asset_manager, sample_asset):
+    def test_vtxo_id_uniqueness(self, asset_manager, sample_asset, test_db_session):
         """Test VTXO ID uniqueness"""
         # Create multiple VTXOs with same parameters
         result1 = asset_manager.manage_vtxos(
@@ -767,7 +698,7 @@ class TestAssetManager:
         # VTXO IDs should be different due to timestamp
         assert result1['vtxo_id'] != result2['vtxo_id']
 
-    def test_asset_stats_comprehensive(self, asset_manager):
+    def test_asset_stats_comprehensive(self, asset_manager, test_db_session):
         """Test comprehensive asset statistics"""
         # Create multiple assets and balances
         asset_manager.create_asset("STATS1", "Stats Asset 1", "S1")
@@ -789,29 +720,25 @@ class TestAssetManager:
         assert stats['balances']['total_balance_sum'] >= 60000  # 10 * (1000 + 2000 + 3000)
         assert len(stats['top_assets']) <= 10  # Should return top 10
 
-    def test_cleanup_performance(self, asset_manager, sample_asset):
+    def test_cleanup_performance(self, asset_manager, sample_asset, test_db_session):
         """Test cleanup performance with many expired VTXOs"""
         import time
 
         # Create many expired VTXOs
-        db_session = get_session()
-        try:
-            for i in range(100):
-                expired_vtxo = Vtxo(
-                    vtxo_id=f"expired_vtxo_{i}",
-                    txid=f"expired_txid_{i}",
-                    vout=0,
-                    amount_sats=100,
-                    script_pubkey=f"script_{i}".encode(),
-                    asset_id="BTC",
-                    user_pubkey="test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
-                    status="available",
-                    expires_at=datetime.utcnow() - timedelta(hours=1)
-                )
-                db_session.add(expired_vtxo)
-            db_session.commit()
-        finally:
-            db_session.close()
+        for i in range(100):
+            expired_vtxo = Vtxo(
+                vtxo_id=f"expired_vtxo_{i}",
+                txid=f"expired_txid_{i}",
+                vout=0,
+                amount_sats=100,
+                script_pubkey=f"script_{i}".encode(),
+                asset_id="BTC",
+                user_pubkey="test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
+                status="available",
+                expires_at=datetime.utcnow() - timedelta(hours=1)
+            )
+            test_db_session.add(expired_vtxo)
+        test_db_session.commit()
 
         # Measure cleanup time
         start_time = time.time()
@@ -824,7 +751,7 @@ class TestAssetManager:
         assert end_time - start_time < 5.0
 
     @pytest.mark.slow
-    def test_large_dataset_performance(self, asset_manager):
+    def test_large_dataset_performance(self, asset_manager, test_db_session):
         """Test performance with large dataset"""
         import time
 
@@ -863,7 +790,7 @@ class TestAssetManager:
         assert list_time < 1.0    # Should complete in less than 1 second
         assert stats_time < 5.0   # Should complete in less than 5 seconds
 
-    def test_generate_vtxo_id(self, asset_manager):
+    def test_generate_vtxo_id(self, asset_manager, test_db_session):
         """Test VTXO ID generation"""
         vtxo_id = asset_manager._generate_vtxo_id(
             "test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
@@ -873,7 +800,7 @@ class TestAssetManager:
         assert isinstance(vtxo_id, str)
         assert len(vtxo_id) == 64  # SHA256 hash length
 
-    def test_generate_script_pubkey(self, asset_manager):
+    def test_generate_script_pubkey(self, asset_manager, test_db_session):
         """Test script pubkey generation"""
         script_pubkey = asset_manager._generate_script_pubkey("test_user_pubkey")
 
