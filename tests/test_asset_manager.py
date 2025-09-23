@@ -26,21 +26,28 @@ class TestAssetManager:
         return AssetManager()
 
     @pytest.fixture
-    def sample_asset(self, test_db_session):
+    def sample_asset(self):
         """Create a sample asset"""
-        return create_test_asset(test_db_session)
+        from core.models import get_session
+        from tests.test_database_setup import sample_asset_data
+        session = get_session()
+        return create_test_asset(session, sample_asset_data('BTC'))
 
     @pytest.fixture
-    def sample_balance(self, test_db_session, sample_asset):
+    def sample_balance(self, sample_asset):
         """Create a sample asset balance"""
-        return create_test_balance(test_db_session)
+        from core.models import get_session
+        session = get_session()
+        return create_test_balance(session)
 
     @pytest.fixture
-    def sample_vtxo(self, test_db_session, sample_asset):
+    def sample_vtxo(self, sample_asset):
         """Create a sample VTXO"""
-        return create_test_vtxo(test_db_session)
+        from core.models import get_session
+        session = get_session()
+        return create_test_vtxo(session)
 
-    def test_create_asset_success(self, asset_manager, test_db_session):
+    def test_create_asset_success(self, asset_manager):
         """Test successful asset creation"""
         result = asset_manager.create_asset(
             asset_id="TEST_UNIT",
@@ -62,11 +69,13 @@ class TestAssetManager:
         assert result['asset_metadata'] == {"description": "Test asset for unit testing"}
 
         # Verify asset was created in database
-        asset = test_db_session.query(Asset).filter_by(asset_id="TEST_UNIT").first()
+        from core.models import get_session
+        session = get_session()
+        asset = session.query(Asset).filter_by(asset_id="TEST_UNIT").first()
         assert asset is not None
         assert asset.name == "Test Asset Unit"
 
-    def test_create_asset_already_exists(self, asset_manager, sample_asset, test_db_session):
+    def test_create_asset_already_exists(self, asset_manager, sample_asset):
         """Test creating asset that already exists"""
         with pytest.raises(AssetError, match="already exists"):
             asset_manager.create_asset(

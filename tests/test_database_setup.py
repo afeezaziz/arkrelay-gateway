@@ -28,8 +28,10 @@ def test_tables(test_engine):
 @pytest.fixture(scope="function")
 def test_db_session(test_engine, test_tables):
     """Create a fresh database session for each test"""
-    Session = sessionmaker(bind=test_engine)
-    session = Session()
+    from sqlalchemy.orm import Session
+
+    # Create a session with nested transaction support
+    session = Session(bind=test_engine)
 
     # Begin transaction for rollback
     session.begin_nested()
@@ -57,10 +59,10 @@ def mock_db_session():
     return mock_session
 
 
-def sample_asset_data():
+def sample_asset_data(asset_id='BTC'):
     """Sample asset data for testing"""
     return {
-        'asset_id': 'BTC',
+        'asset_id': asset_id,
         'name': 'Bitcoin',
         'ticker': 'BTC',
         'asset_type': 'normal',
@@ -138,9 +140,15 @@ def create_test_asset(session, asset_data=None):
     """Create a test asset in the database"""
     from datetime import datetime
     from core.models import Asset
+    import uuid
 
     if asset_data is None:
-        asset_data = sample_asset_data()
+        asset_data = sample_asset_data(f'TEST_{uuid.uuid4().hex[:8]}')
+
+    # Check if asset already exists
+    existing_asset = session.query(Asset).filter_by(asset_id=asset_data['asset_id']).first()
+    if existing_asset:
+        return existing_asset
 
     asset = Asset(
         asset_id=asset_data['asset_id'],
@@ -294,12 +302,27 @@ def create_test_transaction(session, transaction_data=None):
 
 # Patch get_session to use test database
 @pytest.fixture(autouse=True)
-def patch_get_session(test_db_session):
+def patch_get_session(test_engine, test_tables):
     """Patch get_session to use test database"""
     from unittest.mock import patch
+    from sqlalchemy.orm import sessionmaker
 
-    with patch('core.models.get_session', return_value=test_db_session), \
-         patch('core.asset_manager.get_session', return_value=test_db_session):
+    # Create a test session factory that uses our test engine
+    TestSession = sessionmaker(bind=test_engine)
+
+    def mock_get_session():
+        session = TestSession()
+        # Use SAVEPOINT for transaction isolation
+        session.begin_nested()
+        return session
+
+    # Also need to patch the engine creation to use our test engine
+    def mock_create_engine(url, **kwargs):
+        return test_engine
+
+    # Patch both get_session and create_engine
+    with patch('core.models.get_session', side_effect=mock_get_session), \
+         patch('core.models.create_engine', side_effect=mock_create_engine):
         yield
 
 
