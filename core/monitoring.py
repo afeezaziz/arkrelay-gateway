@@ -9,7 +9,7 @@ import time
 import threading
 import psutil
 import socket
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, asdict
 from redis import Redis
@@ -32,7 +32,7 @@ class StructuredFormatter(logging.Formatter):
 
     def format(self, record):
         log_data = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': utc_now().isoformat(),
             'level': record.levelname,
             'logger': record.name,
             'message': record.getMessage(),
@@ -50,6 +50,10 @@ class StructuredFormatter(logging.Formatter):
             log_data.update(record.extra_fields)
 
         return json.dumps(log_data)
+
+def utc_now() -> datetime:
+    """Return current UTC time as a naive datetime (UTC) without deprecation warnings."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 # Setup structured logging
 def setup_comprehensive_logging():
@@ -317,7 +321,7 @@ class AlertingSystem:
                     rule_name=rule.name,
                     severity=rule.severity,
                     message=rule.message_template.format(value=current_value, duration=rule.duration_minutes),
-                    triggered_at=datetime.utcnow(),
+                    triggered_at=utc_now(),
                     metadata={'metric_value': current_value, 'threshold': rule.threshold}
                 )
 
@@ -327,14 +331,14 @@ class AlertingSystem:
                 # Update existing alert
                 alert = self.active_alerts[alert_key]
                 alert.metadata['metric_value'] = current_value
-                alert.metadata['last_checked'] = datetime.utcnow().isoformat()
+                alert.metadata['last_checked'] = utc_now().isoformat()
 
         else:
             # Check if we should resolve the alert
             alert_key = f"{rule.name}_{rule.metric_name}"
             if alert_key in self.active_alerts:
                 alert = self.active_alerts[alert_key]
-                alert.resolved_at = datetime.utcnow()
+                alert.resolved_at = utc_now()
                 self._resolve_alert(alert)
                 del self.active_alerts[alert_key]
                 self.alert_history.append(alert)
@@ -353,7 +357,7 @@ class AlertingSystem:
                 session = get_session()
                 try:
                     recent_heartbeats = session.query(Heartbeat).filter(
-                        Heartbeat.timestamp >= datetime.utcnow() - timedelta(minutes=2)
+                        Heartbeat.timestamp >= utc_now() - timedelta(minutes=2)
                     ).all()
                     return len(recent_heartbeats) / 3.0  # Normalize to 0-1
                 finally:
@@ -363,7 +367,7 @@ class AlertingSystem:
                 session = get_session()
                 try:
                     recent_jobs = session.query(JobLog).filter(
-                        JobLog.created_at >= datetime.utcnow() - timedelta(minutes=10)
+                        JobLog.created_at >= utc_now() - timedelta(minutes=10)
                     ).all()
                     if not recent_jobs:
                         return 0.0
@@ -524,7 +528,7 @@ class HealthChecker:
                 'healthy': db_connected,
                 'query_time_ms': round(query_time, 2),
                 'tables': tables_info,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
             # Update Prometheus metrics
@@ -539,7 +543,7 @@ class HealthChecker:
             return {
                 'healthy': False,
                 'error': str(e),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
         finally:
             session.close()
@@ -560,7 +564,7 @@ class HealthChecker:
                 'used_memory_mb': info.get('used_memory', 0) / (1024 * 1024),
                 'connected_clients': info.get('connected_clients', 0),
                 'total_commands_processed': info.get('total_commands_processed', 0),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
             return status
@@ -570,7 +574,7 @@ class HealthChecker:
             return {
                 'healthy': False,
                 'error': str(e),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
     def check_grpc_services_health(self) -> Dict[str, Any]:
@@ -594,7 +598,7 @@ class HealthChecker:
                     'tapd': services_health.get(ServiceType.TAPD, False),
                     'lnd': services_health.get(ServiceType.LND, False)
                 },
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
         except Exception as e:
@@ -602,7 +606,7 @@ class HealthChecker:
             return {
                 'healthy': False,
                 'error': str(e),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
     def check_nostr_health(self) -> Dict[str, Any]:
@@ -615,7 +619,7 @@ class HealthChecker:
                 return {
                     'healthy': False,
                     'error': 'Nostr client not initialized',
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': utc_now().isoformat()
                 }
 
             stats = nostr_client.get_stats()
@@ -625,7 +629,7 @@ class HealthChecker:
                 'connected_relays': stats.get('connected_relays', 0),
                 'events_received': stats.get('events_received', 0),
                 'events_published': stats.get('events_published', 0),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
         except Exception as e:
@@ -633,7 +637,7 @@ class HealthChecker:
             return {
                 'healthy': False,
                 'error': str(e),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
     def comprehensive_health_check(self) -> Dict[str, Any]:
@@ -641,7 +645,7 @@ class HealthChecker:
         health_status = {
             'overall_healthy': True,
             'checks': {},
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         }
 
         # Run all health checks
@@ -665,7 +669,7 @@ class HealthChecker:
                 health_status['checks'][check_name] = {
                     'healthy': False,
                     'error': str(e),
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': utc_now().isoformat()
                 }
                 health_status['overall_healthy'] = False
 

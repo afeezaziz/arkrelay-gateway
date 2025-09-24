@@ -1,6 +1,6 @@
 from redis import Redis
 from rq_scheduler import Scheduler
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 import logging
 import os
@@ -8,6 +8,10 @@ from tasks import log_system_stats, send_heartbeat, cleanup_old_logs, cleanup_ex
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def utc_now() -> datetime:
+    """Return current UTC time as a naive datetime (UTC) without deprecation warnings."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 def setup_scheduler():
     """Setup and configure the scheduler with periodic tasks"""
@@ -28,7 +32,7 @@ def setup_scheduler():
 
     # Schedule system stats every 5 minutes
     scheduler.schedule(
-        datetime.utcnow(),
+        utc_now(),
         func=log_system_stats,
         interval=300,  # 5 minutes
         timeout=60,
@@ -39,7 +43,7 @@ def setup_scheduler():
 
     # Schedule heartbeat every 1 minute
     scheduler.schedule(
-        datetime.utcnow(),
+        utc_now(),
         func=send_heartbeat,
         interval=60,  # 1 minute
         timeout=30,
@@ -50,7 +54,7 @@ def setup_scheduler():
 
     # Schedule cleanup every hour
     scheduler.schedule(
-        datetime.utcnow(),
+        utc_now(),
         func=cleanup_old_logs,
         interval=3600,  # 1 hour
         timeout=120,
@@ -61,7 +65,7 @@ def setup_scheduler():
 
     # Schedule session cleanup every 5 minutes
     scheduler.schedule(
-        datetime.utcnow(),
+        utc_now(),
         func=cleanup_expired_sessions,
         interval=300,  # 5 minutes
         timeout=60,
@@ -72,7 +76,7 @@ def setup_scheduler():
 
     # Schedule VTXO cleanup every 30 minutes
     scheduler.schedule(
-        datetime.utcnow(),
+        utc_now(),
         func=cleanup_vtxos,
         interval=1800,  # 30 minutes
         timeout=60,

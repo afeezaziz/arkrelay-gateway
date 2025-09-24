@@ -1,7 +1,7 @@
 import hashlib
 import json
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Any, Tuple
 import logging
 from cryptography.hazmat.primitives import hashes
@@ -12,6 +12,10 @@ from core.models import SigningChallenge, SigningSession, get_session
 from core.session_manager import SessionState, get_session_manager
 
 logger = logging.getLogger(__name__)
+
+def utc_now() -> datetime:
+    """Return current UTC time as a naive datetime (UTC) without deprecation warnings."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 class ChallengeManager:
     """Manages signing challenges with validation and context generation"""
@@ -87,7 +91,7 @@ class ChallengeManager:
                 return False
 
             # Check expiration
-            if challenge.expires_at < datetime.utcnow():
+            if challenge.expires_at < utc_now():
                 logger.error(f"Challenge expired for session {session_id}")
                 return False
 
@@ -184,7 +188,7 @@ class ChallengeManager:
 
                 # Otherwise, create and persist a simple challenge directly
                 challenge_id = self._generate_challenge_id(session_id, b'test')
-                expires_at = datetime.utcnow() + timedelta(seconds=self.challenge_timeout)
+                expires_at = utc_now() + timedelta(seconds=self.challenge_timeout)
                 challenge = SigningChallenge(
                     challenge_id=challenge_id,
                     session_id=session_id,
@@ -197,7 +201,7 @@ class ChallengeManager:
                 db_session.challenge_id = challenge_id
                 db_session.context = json.dumps(context_data) if isinstance(context_data, dict) else str(context_data)
                 db_session.status = SessionState.CHALLENGE_SENT.value
-                db_session.updated_at = datetime.utcnow()
+                db_session.updated_at = utc_now()
                 session.commit()
                 session.refresh(challenge)
                 return challenge
@@ -218,7 +222,7 @@ class ChallengeManager:
         session = get_session()
         try:
             expired_challenges = session.query(SigningChallenge).filter(
-                SigningChallenge.expires_at < datetime.utcnow(),
+                SigningChallenge.expires_at < utc_now(),
                 SigningChallenge.is_used == False
             ).all()
 
@@ -253,7 +257,7 @@ class ChallengeManager:
         # Create structured challenge data
         challenge_struct = {
             'session_id': session_id,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': utc_now().isoformat(),
             'nonce': self._generate_nonce(),
             'context': context_data
         }
@@ -318,7 +322,7 @@ class ChallengeManager:
 
     def _generate_challenge_id(self, session_id: str, challenge_data: bytes) -> str:
         """Generate unique challenge ID"""
-        data = f"{session_id}{challenge_data.hex()}{datetime.utcnow().isoformat()}"
+        data = f"{session_id}{challenge_data.hex()}{utc_now().isoformat()}"
         return hashlib.sha256(data.encode()).hexdigest()
 
     def _generate_nonce(self) -> str:

@@ -16,7 +16,7 @@ def _get_db_session():
 import uuid
 import json
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Any, List, Tuple
 from enum import Enum
 import logging
@@ -30,6 +30,10 @@ import time
 import re
 
 logger = logging.getLogger(__name__)
+
+def utc_now() -> datetime:
+    """Return current UTC time as a naive datetime (UTC) without deprecation warnings."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 class TransactionType(Enum):
     ARK_TX = 'ark_tx'
@@ -372,7 +376,7 @@ class TransactionProcessor:
                         blockchain_status = arkd_client.get_transaction_status(txid)
                         if blockchain_status.get('confirmed'):
                             transaction.status = TransactionStatus.CONFIRMED.value
-                            transaction.confirmed_at = datetime.utcnow()
+                            transaction.confirmed_at = utc_now()
                             transaction.block_height = blockchain_status.get('block_height')
                             session.commit()
                     except Exception:
@@ -537,7 +541,7 @@ class TransactionProcessor:
 
     def _generate_txid(self) -> str:
         """Generate a unique transaction ID"""
-        return hashlib.sha256(f"{uuid.uuid4()}{datetime.utcnow().isoformat()}".encode()).hexdigest()
+        return hashlib.sha256(f"{uuid.uuid4()}{utc_now().isoformat()}".encode()).hexdigest()
 
     def _parse_transaction_outputs(self, tx_data: bytes) -> List[Dict[str, Any]]:
         """
@@ -648,7 +652,7 @@ class TransactionProcessor:
                 if tx_status.get('confirmations', 0) >= confirmations:
                     # Mark as confirmed
                     transaction.status = TransactionStatus.CONFIRMED.value
-                    transaction.confirmed_at = datetime.utcnow()
+                    transaction.confirmed_at = utc_now()
                     transaction.block_height = tx_status.get('block_height')
 
                     # Finalize balance updates

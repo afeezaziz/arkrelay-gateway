@@ -6,6 +6,7 @@ and proof validation capabilities.
 """
 
 import grpc
+import sys
 import logging
 from typing import Optional, Dict, Any, List, Union
 from dataclasses import dataclass
@@ -71,6 +72,36 @@ class TapdClient(GrpcClientBase):
 
     def __init__(self, config: ConnectionConfig):
         super().__init__(ServiceType.TAPD, config)
+
+    def _connect(self):
+        """Establish gRPC connection using this module's grpc (for test patching)."""
+        try:
+            if self.channel:
+                self.channel.close()
+
+            options = [
+                ('grpc.max_send_message_length', self.config.max_message_length),
+                ('grpc.max_receive_message_length', self.config.max_message_length),
+                ('grpc.keepalive_time_ms', 30000),
+                ('grpc.keepalive_timeout_ms', 5000),
+                ('grpc.keepalive_permit_without_calls', 1),
+            ]
+
+            target = f"{self.config.host}:{self.config.port}"
+            mod = sys.modules[__name__]
+            if self.config.tls_cert:
+                with open(self.config.tls_cert, 'rb') as f:
+                    cert = f.read()
+                credentials = grpc.ssl_channel_credentials(cert)
+                self.channel = mod.grpc.secure_channel(target, credentials, options=options)
+            else:
+                self.channel = mod.grpc.insecure_channel(target, options=options)
+
+            self.stub = self._create_stub()
+            logger.info(f"Connected to {self.service_type.value} at {self.config.host}:{self.config.port}")
+        except Exception as e:
+            logger.error(f"Failed to connect to {self.service_type.value}: {e}")
+            raise
 
     def _create_stub(self):
         """Create TAPD gRPC stub"""

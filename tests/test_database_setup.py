@@ -328,8 +328,8 @@ def patch_get_session(test_db_session):
 
     with (
         patch('core.models.get_session', side_effect=_new_session),
-        # Asset manager should use the shared per-test Session so object state is consistent across calls
-        patch('core.asset_manager.get_session', new=lambda: test_db_session),
+        # Use new Session per call for asset_manager to maintain thread safety in concurrency tests
+        patch('core.asset_manager.get_session', side_effect=_new_session),
         patch('core.session_manager.get_session', side_effect=_new_session),
         patch('builtins.get_session', new=lambda: test_db_session),
         patch('tests.test_transaction_processor.test_engine', new=engine),

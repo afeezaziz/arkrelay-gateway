@@ -1,7 +1,8 @@
 import uuid
 import json
 import hashlib
-from datetime import datetime, timedelta
+import builtins
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Any, List, Tuple
 from enum import Enum
 import logging
@@ -10,6 +11,10 @@ from grpc_clients import get_grpc_manager, ServiceType
 from sqlalchemy import and_, or_, func
 
 logger = logging.getLogger(__name__)
+
+def utc_now() -> datetime:
+    """Return current UTC time as a naive datetime (UTC) without deprecation warnings."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 class AssetType(Enum):
     NORMAL = 'normal'
@@ -349,7 +354,7 @@ class AssetManager:
                 'amount_minted': amount,
                 'reserve_amount': reserve_amount,
                 'new_balance': balance.balance,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
         except Exception as e:
@@ -426,7 +431,7 @@ class AssetManager:
                 'amount': amount,
                 'sender_balance': sender_balance.balance,
                 'recipient_balance': recipient_balance.balance,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
         except Exception as e:
@@ -477,7 +482,7 @@ class AssetManager:
             query = query.filter_by(asset_id=asset_id)
 
         # Filter out expired and spent VTXOs
-        now = datetime.utcnow()
+        now = utc_now()
         query = query.filter(
             Vtxo.expires_at > now,
             Vtxo.status != VtxoStatus.SPENT.value
@@ -518,7 +523,7 @@ class AssetManager:
         vtxo_id = str(uuid.uuid4())
 
         # Calculate expiry
-        expires_at = datetime.utcnow() + timedelta(hours=self.vtxo_expiry_hours)
+        expires_at = utc_now() + timedelta(hours=self.vtxo_expiry_hours)
 
         # Create VTXO
         vtxo = Vtxo(
@@ -561,7 +566,7 @@ class AssetManager:
             raise AssetError(f"VTXO {vtxo_id} is not available")
 
         # Check expiry
-        if vtxo.expires_at < datetime.utcnow():
+        if vtxo.expires_at < utc_now():
             vtxo.status = VtxoStatus.EXPIRED.value
             session.commit()
             raise AssetError(f"VTXO {vtxo_id} has expired")
@@ -575,7 +580,7 @@ class AssetManager:
             'vtxo_id': vtxo_id,
             'status': 'assigned',
             'session_id': session_id,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         }
 
     def _spend_vtxo(self, session, user_pubkey: str, vtxo_id: str,
@@ -598,7 +603,7 @@ class AssetManager:
             'vtxo_id': vtxo_id,
             'status': 'spent',
             'spending_txid': spending_txid,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         }
 
     def get_asset_stats(self) -> Dict[str, Any]:
@@ -660,7 +665,7 @@ class AssetManager:
                     }
                     for asset in top_assets
                 ],
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
         except Exception as e:
@@ -671,9 +676,15 @@ class AssetManager:
 
     def cleanup_expired_vtxos(self) -> Dict[str, Any]:
         """Clean up expired VTXOs"""
-        session = get_session()
+        # In tests, builtins.get_session is patched to return the shared per-test Session.
+        # Use it when available to ensure the same identity map is used for verification queries.
         try:
-            now = datetime.utcnow()
+            session_factory = getattr(builtins, 'get_session', None)
+            session = session_factory() if callable(session_factory) else get_session()
+        except Exception:
+            session = get_session()
+        try:
+            now = utc_now()
 
             # Find expired VTXOs
             expired_vtxos = session.query(Vtxo).filter(
@@ -695,7 +706,7 @@ class AssetManager:
             return {
                 'cleaned_vtxos': count,
                 'total_amount_sats': total_amount,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
         except Exception as e:
@@ -708,7 +719,7 @@ class AssetManager:
     def _generate_vtxo_id(self, user_pubkey: str, amount_sats: int) -> str:
         """Generate a unique VTXO ID as a 64-char sha256 hex string"""
         nonce = uuid.uuid4().hex
-        data = f"{user_pubkey}{amount_sats}{datetime.utcnow().isoformat()}{nonce}"
+        data = f"{user_pubkey}{amount_sats}{utc_now().isoformat()}{nonce}"
         return hashlib.sha256(data.encode()).hexdigest()
 
     def _generate_script_pubkey(self, user_pubkey: str) -> bytes:

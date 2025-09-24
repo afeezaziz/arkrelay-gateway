@@ -3,7 +3,7 @@ Administrative API endpoints for ArkRelay Gateway monitoring and management.
 """
 
 from flask import Blueprint, jsonify, request
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List
 import json
 import os
@@ -41,6 +41,10 @@ def require_admin_auth(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def utc_now() -> datetime:
+    """Return current UTC time as a naive datetime (UTC) without deprecation warnings."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 @admin_bp.route('/health/comprehensive')
 @require_admin_auth
 def comprehensive_health_check():
@@ -51,7 +55,7 @@ def comprehensive_health_check():
 
         return jsonify({
             'status': health_status,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -65,7 +69,7 @@ def get_system_metrics():
         session = get_session()
 
         # Get system metrics for the specified time range
-        since = datetime.utcnow() - timedelta(hours=hours)
+        since = utc_now() - timedelta(hours=hours)
         metrics = session.query(SystemMetrics).filter(
             SystemMetrics.timestamp >= since
         ).order_by(SystemMetrics.timestamp.desc()).all()
@@ -88,7 +92,7 @@ def get_system_metrics():
             'metrics': metrics_data,
             'time_range_hours': hours,
             'count': len(metrics_data),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         })
 
     except Exception as e:
@@ -109,7 +113,7 @@ def get_alerts():
             'active_alerts': active_alerts,
             'active_count': len(active_alerts),
             'history_limit': history_limit,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         })
 
     except Exception as e:
@@ -139,7 +143,7 @@ def get_alert_rules():
         return jsonify({
             'rules': rules_data,
             'count': len(rules_data),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         })
 
     except Exception as e:
@@ -162,7 +166,7 @@ def toggle_alert_rule(rule_name):
                     'message': f'Alert rule {rule_name} {"enabled" if enabled else "disabled"}',
                     'rule_name': rule_name,
                     'enabled': enabled,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': utc_now().isoformat()
                 })
 
         return jsonify({'error': f'Alert rule {rule_name} not found'}), 404
@@ -178,7 +182,7 @@ def get_job_statistics():
         hours = request.args.get('hours', 24, type=int)
         session = get_session()
 
-        since = datetime.utcnow() - timedelta(hours=hours)
+        since = utc_now() - timedelta(hours=hours)
 
         # Get job counts by status
         status_counts = session.query(
@@ -211,8 +215,8 @@ def get_job_statistics():
         # Get failure rate by hour
         failure_rates = []
         for i in range(hours):
-            hour_start = datetime.utcnow() - timedelta(hours=i+1)
-            hour_end = datetime.utcnow() - timedelta(hours=i)
+            hour_start = utc_now() - timedelta(hours=i+1)
+            hour_end = utc_now() - timedelta(hours=i)
 
             total_jobs = session.query(JobLog).filter(
                 JobLog.created_at >= hour_start,
@@ -250,7 +254,7 @@ def get_job_statistics():
                 for stat in duration_stats
             ],
             'failure_rates': failure_rates,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         })
 
     except Exception as e:
@@ -264,32 +268,33 @@ def get_services_status():
         monitoring_system = get_monitoring_system()
         redis_client = monitoring_system.redis
 
-        # Get queue status
+        # Queue status
         queued_jobs = redis_client.llen('rq:queue:default')
         scheduled_jobs = len(redis_client.zrange('rq:scheduler:scheduled_jobs', 0, -1))
         failed_jobs = len(redis_client.lrange('rq:failed_registry', 0, -1))
 
-        # Get worker count
+        # Worker count
         workers = redis_client.smembers('rq:workers')
-        worker_count = len(workers)
+        worker_count = len(workers) if workers is not None else 0
 
-        # Get service heartbeats
+        # Services status from recent heartbeats (last 5 minutes)
         session = get_session()
         try:
             recent_heartbeats = session.query(Heartbeat).filter(
-                Heartbeat.timestamp >= datetime.utcnow() - timedelta(minutes=5)
+                Heartbeat.timestamp >= utc_now() - timedelta(minutes=5)
             ).order_by(Heartbeat.timestamp.desc()).all()
-
-            services_status = {}
-            for heartbeat in recent_heartbeats:
-                if heartbeat.service_name not in services_status:
-                    services_status[heartbeat.service_name] = {
-                        'last_heartbeat': heartbeat.timestamp.isoformat(),
-                        'alive': heartbeat.is_alive,
-                        'message': heartbeat.message
-                    }
         finally:
             session.close()
+
+        services_status = [
+            {
+                'service_name': hb.service_name,
+                'last_heartbeat': hb.timestamp.isoformat(),
+                'alive': hb.is_alive,
+                'message': hb.message
+            }
+            for hb in recent_heartbeats
+        ]
 
         return jsonify({
             'queue_status': {
@@ -299,7 +304,7 @@ def get_services_status():
                 'worker_count': worker_count
             },
             'services': services_status,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         })
 
     except Exception as e:
@@ -354,7 +359,7 @@ def get_database_stats():
         return jsonify({
             'database_size_mb': db_size_mb,
             'tables': tables_info,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         })
 
     except Exception as e:
@@ -414,7 +419,7 @@ def get_system_info():
             'disk': disk_info,
             'network': network_info,
             'process': process_info,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         })
 
     except Exception as e:
@@ -462,7 +467,7 @@ def get_configuration():
 
         return jsonify({
             'configuration': config_data,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         })
 
     except Exception as e:
@@ -506,7 +511,7 @@ def get_recent_logs():
             'limit': limit,
             'level_filter': level,
             'count': len(logs_data),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         })
 
     except Exception as e:
@@ -522,7 +527,7 @@ def cleanup_old_data():
         dry_run = data.get('dry_run', False)
 
         session = get_session()
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = utc_now() - timedelta(days=days)
 
         cleanup_stats = {}
 
@@ -575,7 +580,7 @@ def cleanup_old_data():
                 'message': f'Cleanup {"simulated" if dry_run else "completed"}',
                 'cleanup_stats': cleanup_stats,
                 'dry_run': dry_run,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             })
 
         except Exception as e:
@@ -597,7 +602,7 @@ def create_backup():
         # This is a simplified backup implementation
         # In production, you'd use proper database backup tools
 
-        backup_id = f"backup_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        backup_id = f"backup_{utc_now().strftime('%Y%m%d_%H%M%S')}"
         backup_filename = f"/tmp/{backup_id}.sql"
 
         try:
@@ -640,7 +645,7 @@ def create_backup():
                 'backup_type': backup_type,
                 'filename': backup_filename,
                 'size_bytes': backup_size,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             })
 
         except subprocess.TimeoutExpired:
@@ -717,7 +722,7 @@ def performance_profile():
             'memory_stats': calculate_stats(monitoring_results['memory_samples']),
             'disk_stats': calculate_stats(monitoring_results['disk_samples']),
             'network_stats': network_stats,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         })
 
     except Exception as e:
@@ -739,7 +744,7 @@ def restart_service():
         return jsonify({
             'message': f'Service {service} restart requested',
             'service': service,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         })
 
     except Exception as e:
@@ -798,7 +803,7 @@ def get_dashboard_summary():
                 'active_sessions': active_sessions,
                 'active_alerts': len(active_alerts)
             },
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         })
 
     except Exception as e:

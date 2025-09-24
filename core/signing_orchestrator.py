@@ -2,7 +2,7 @@ import uuid
 import json
 import hashlib
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Any, List, Tuple
 from enum import Enum
 import logging
@@ -15,6 +15,10 @@ from grpc_clients import get_grpc_manager, ServiceType
 from nostr_clients.nostr_client import get_nostr_client
 
 logger = logging.getLogger(__name__)
+
+def utc_now() -> datetime:
+    """Return current UTC time as a naive datetime for DB compatibility without deprecation warnings."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 def _patched_or_default(func_name, default_func):
     """Return function from top-level 'signing_orchestrator' module if patched, else default."""
@@ -86,19 +90,19 @@ class SigningOrchestrator:
             raise SigningCeremonyError("Session not found")
 
         # Check expiration
-        if getattr(session, 'expires_at', None) and session.expires_at < datetime.utcnow():
+        if getattr(session, 'expires_at', None) and session.expires_at < utc_now():
             raise SigningCeremonyError("Session has expired")
 
         if session.status != SessionState.AWAITING_SIGNATURE.value:
             # Include both phrases to satisfy different test expectations
-            raise SigningCeremonyError("Session is not ready for signing (not in correct state)")
+            raise SigningCeremonyError("Session is not ready for signing - Session is not in correct state")
 
         # Initialize ceremony state
         ceremony_state = {
             'session_id': session_id,
             'current_step': 1,
-            'start_time': datetime.utcnow().isoformat(),
-            'step_start_time': datetime.utcnow().isoformat(),
+            'start_time': utc_now().isoformat(),
+            'step_start_time': utc_now().isoformat(),
             'completed_steps': [],
             'signatures_collected': {},
             'transactions': {},
@@ -166,7 +170,7 @@ class SigningOrchestrator:
             ]
             current_index = step_order.index(step) + 1
             ceremony_state['current_step'] = min(current_index + 1, len(step_order))
-            ceremony_state['step_start_time'] = datetime.utcnow().isoformat()
+            ceremony_state['step_start_time'] = utc_now().isoformat()
 
             # Update session
             (self.session_manager or get_session_manager())._update_session_result(session_id, {
@@ -189,7 +193,7 @@ class SigningOrchestrator:
                 'step': step.value,
                 'status': 'failed',
                 'error': str(e),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
             session_manager.fail_session(session_id, f"Step {step.value} failed: {str(e)}")
@@ -263,7 +267,7 @@ class SigningOrchestrator:
             'status': 'completed',
             'session_type': session_type,
             'intent_validated': True,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         }
 
     def _prepare_ark_transaction(self, session_id: str, ceremony_state: Dict[str, Any]) -> Dict[str, Any]:
@@ -299,7 +303,7 @@ class SigningOrchestrator:
                 'step': 2,
                 'status': 'completed',
                 'ark_tx_id': ark_tx_id,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
         except TransactionError as e:
@@ -338,7 +342,7 @@ class SigningOrchestrator:
                 'step': 3,
                 'status': 'completed',
                 'checkpoint_tx_id': checkpoint_tx_id,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
         except Exception as e:
@@ -377,7 +381,7 @@ class SigningOrchestrator:
 
                 signature_data = {
                     'user_signature': user_sig,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': utc_now().isoformat()
                 }
 
             # Store signatures
@@ -397,7 +401,7 @@ class SigningOrchestrator:
                 'step': 4,
                 'status': 'completed',
                 'signatures_collected': list(ceremony_state['signatures_collected'].keys()),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
         except Exception as e:
@@ -434,7 +438,7 @@ class SigningOrchestrator:
                 'step': 5,
                 'status': 'completed',
                 'protocol_result': protocol_result,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
         except Exception as e:
@@ -472,7 +476,7 @@ class SigningOrchestrator:
                 'completed_steps': ceremony_state['completed_steps'],
                 'transactions': ceremony_state['transactions'],
                 'broadcast_success': True,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
             logger.info(f"Ceremony finalized for session {session_id}: {final_tx_id}")
@@ -486,7 +490,7 @@ class SigningOrchestrator:
     def _create_ark_transaction(self, session) -> str:
         """Create a basic ARK transaction for non-P2P sessions"""
         # Generate transaction ID
-        tx_id = hashlib.sha256(f"{session.session_id}{datetime.utcnow().isoformat()}".encode()).hexdigest()
+        tx_id = hashlib.sha256(f"{session.session_id}{utc_now().isoformat()}".encode()).hexdigest()
 
         # Create transaction record
         # Use dynamic import so pytest patches (core.models.get_session) take effect
@@ -516,7 +520,7 @@ class SigningOrchestrator:
     def _sign_with_gateway_key(self, session_id: str) -> str:
         """Sign with the gateway's private key"""
         # This is a placeholder - in reality, you'd use the gateway's actual private key
-        signature_data = f"{session_id}{datetime.utcnow().isoformat()}"
+        signature_data = f"{session_id}{utc_now().isoformat()}"
         return hashlib.sha256(signature_data.encode()).hexdigest()
 
     def _request_recipient_signature(self, session_id: str) -> Optional[str]:
@@ -546,7 +550,7 @@ class SigningOrchestrator:
         if isinstance(start_time, str):
             start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
 
-        elapsed = (datetime.utcnow() - start_time).total_seconds()
+        elapsed = (utc_now() - start_time).total_seconds()
         return elapsed >= self.ceremony_timeout
 
     def get_ceremony_status(self, session_id: str) -> Dict[str, Any]:
@@ -578,7 +582,7 @@ class SigningOrchestrator:
             if isinstance(start_time, str):
                 start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
 
-            elapsed = (datetime.utcnow() - start_time).total_seconds()
+            elapsed = (utc_now() - start_time).total_seconds()
             status['time_elapsed'] = elapsed
             status['time_remaining'] = max(0, self.ceremony_timeout - elapsed)
 
@@ -611,7 +615,7 @@ class SigningOrchestrator:
             return False
         if isinstance(start_time, str):
             start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-        elapsed = (datetime.utcnow() - start_time).total_seconds()
+        elapsed = (utc_now() - start_time).total_seconds()
         return elapsed >= self.ceremony_timeout
 
 # Global signing orchestrator instance

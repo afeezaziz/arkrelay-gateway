@@ -13,7 +13,7 @@ This module implements the complete VTXO lifecycle management including:
 import logging
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional, Tuple
 from sqlalchemy import func, and_, or_
 from core.models import Vtxo, Asset, AssetBalance, Transaction, SigningSession, get_session
@@ -21,6 +21,10 @@ from grpc_clients import get_grpc_manager, ServiceType
 from core.asset_manager import get_asset_manager
 
 logger = logging.getLogger(__name__)
+
+def utc_now() -> datetime:
+    """Return current UTC time as a naive datetime (UTC) without deprecation warnings."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 class VtxoInventoryMonitor:
     """Monitors VTXO inventory levels and triggers replenishment"""
@@ -209,7 +213,7 @@ class VtxoManager:
 
     def _store_vtxo_batch(self, session, vtxo_batch: Dict, asset_id: str, amount_sats: int):
         """Store created VTXOs in database"""
-        expiry_time = datetime.utcnow() + timedelta(hours=self.vtxo_expiry_hours)
+        expiry_time = utc_now() + timedelta(hours=self.vtxo_expiry_hours)
 
         for vtxo_data in vtxo_batch.get('vtxos', []):
             vtxo = Vtxo(
@@ -246,7 +250,7 @@ class VtxoManager:
                     Vtxo.asset_id == asset_id,
                     Vtxo.status == 'available',
                     Vtxo.amount_sats >= amount_needed,
-                    Vtxo.expires_at > datetime.utcnow()
+                    Vtxo.expires_at > utc_now()
                 )
             ).order_by(Vtxo.amount_sats.asc()).first()
 
@@ -311,7 +315,7 @@ class VtxoManager:
         try:
             expired_vtxos = session.query(Vtxo).filter(
                 and_(
-                    Vtxo.expires_at <= datetime.utcnow(),
+                    Vtxo.expires_at <= utc_now(),
                     Vtxo.status == 'available'
                 )
             ).all()

@@ -1,7 +1,7 @@
 import uuid
 import hashlib
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Any, List
 from enum import Enum
 import logging
@@ -9,6 +9,10 @@ from core.models import SigningSession, SigningChallenge, get_session
 from sqlalchemy import and_, or_
 
 logger = logging.getLogger(__name__)
+
+def utc_now() -> datetime:
+    """Return current UTC time as a naive datetime (UTC) without deprecation warnings."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 class SessionState(Enum):
     INITIATED = 'initiated'
@@ -107,7 +111,7 @@ class SigningSessionManager:
             session_id = self._generate_session_id(user_pubkey, session_type, intent_data)
 
             # Calculate expiration time
-            expires_at = datetime.utcnow() + timedelta(seconds=self.session_timeout)
+            expires_at = utc_now() + timedelta(seconds=self.session_timeout)
 
             # Create session
             new_session = SigningSession(
@@ -246,7 +250,7 @@ class SigningSessionManager:
                 return False
 
             # Expiration check
-            if getattr(db_session_obj, 'expires_at', None) and db_session_obj.expires_at < datetime.utcnow() and db_session_obj.status not in ['completed', 'failed', 'expired']:
+            if getattr(db_session_obj, 'expires_at', None) and db_session_obj.expires_at < utc_now() and db_session_obj.status not in ['completed', 'failed', 'expired']:
                 raise SessionExpiredError(f"Session {session_id} has expired")
 
             current_state = SessionState(db_session_obj.status)
@@ -303,7 +307,7 @@ class SigningSessionManager:
                 return None
 
             # Check if session is expired
-            if session.expires_at < datetime.utcnow() and session.status not in ['completed', 'failed', 'expired']:
+            if session.expires_at < utc_now() and session.status not in ['completed', 'failed', 'expired']:
                 # Raise instead of mutating for compatibility with tests
                 raise SessionExpiredError(f"Session {session_id} has expired")
 
@@ -337,7 +341,7 @@ class SigningSessionManager:
                 return False
 
             # Check if session is expired (guard None)
-            if getattr(db_session_obj, 'expires_at', None) and db_session_obj.expires_at < datetime.utcnow():
+            if getattr(db_session_obj, 'expires_at', None) and db_session_obj.expires_at < utc_now():
                 self._update_session_status(db_session_obj, SessionState.EXPIRED.value, "Session expired")
                 session.commit()
                 return False
@@ -393,7 +397,7 @@ class SigningSessionManager:
             challenge_id = self._generate_challenge_id(session_id, challenge_data)
 
             # Calculate expiration
-            expires_at = datetime.utcnow() + timedelta(seconds=self.challenge_timeout)
+            expires_at = utc_now() + timedelta(seconds=self.challenge_timeout)
 
             # Create challenge
             challenge = SigningChallenge(
@@ -445,7 +449,7 @@ class SigningSessionManager:
                 return False
 
             # Check if challenge is expired
-            if challenge.expires_at < datetime.utcnow():
+            if challenge.expires_at < utc_now():
                 self._update_session_status(db_session, SessionState.EXPIRED.value, "Challenge expired")
                 session.commit()
                 return False
@@ -520,7 +524,7 @@ class SigningSessionManager:
                     SessionState.AWAITING_SIGNATURE.value,
                     SessionState.SIGNING.value
                 ]),
-                SigningSession.expires_at > datetime.utcnow()
+                SigningSession.expires_at > utc_now()
             )
 
             if user_pubkey:
@@ -561,7 +565,7 @@ class SigningSessionManager:
         session = get_session()
         try:
             return session.query(SigningSession).filter(
-                (SigningSession.expires_at < datetime.utcnow()) | (SigningSession.status == SessionState.EXPIRED.value)
+                (SigningSession.expires_at < utc_now()) | (SigningSession.status == SessionState.EXPIRED.value)
             ).all()
         except Exception as e:
             logger.error(f"Error getting expired sessions: {e}")
@@ -581,7 +585,7 @@ class SigningSessionManager:
         session = get_session()
         try:
             count = session.query(SigningSession).filter(
-                SigningSession.expires_at < datetime.utcnow(),
+                SigningSession.expires_at < utc_now(),
                 ~SigningSession.status.in_([
                     SessionState.COMPLETED.value,
                     SessionState.FAILED.value,
@@ -616,7 +620,7 @@ class SigningSessionManager:
         if not sess:
             return
         expires_at = getattr(sess, 'expires_at', None)
-        if expires_at and expires_at < datetime.utcnow():
+        if expires_at and expires_at < utc_now():
             raise SessionTimeoutError("Session has expired")
 
     def validate_challenge_timeout(self, challenge_id: str) -> None:
@@ -636,7 +640,7 @@ class SigningSessionManager:
                 session.close()
         if not challenge:
             raise ChallengeExpiredError("Challenge not found")
-        if getattr(challenge, 'expires_at', None) and challenge.expires_at < datetime.utcnow():
+        if getattr(challenge, 'expires_at', None) and challenge.expires_at < utc_now():
             raise ChallengeExpiredError("Challenge has expired")
 
     def get_session_metrics(self) -> Dict[str, Any]:
@@ -680,7 +684,7 @@ class SigningSessionManager:
 
     def _generate_challenge_id(self, session_id: str, challenge_data: bytes) -> str:
         """Generate unique challenge ID"""
-        data = f"{session_id}{challenge_data.hex()}{datetime.utcnow().isoformat()}"
+        data = f"{session_id}{challenge_data.hex()}{utc_now().isoformat()}"
         return hashlib.sha256(data.encode()).hexdigest()
 
     def _is_valid_transition(self, current_status: str, new_status: str) -> bool:
@@ -718,7 +722,7 @@ class SigningSessionManager:
     def _update_session_status(self, session_obj: SigningSession, new_status: str, message: str = None):
         """Update session status and message"""
         session_obj.status = new_status
-        session_obj.updated_at = datetime.utcnow()
+        session_obj.updated_at = utc_now()
         if message:
             session_obj.error_message = message
 
@@ -760,7 +764,7 @@ class SigningSessionManager:
 
             db_session.result_data = _sanitize(result_data)
             db_session.signed_tx = signed_tx
-            db_session.updated_at = datetime.utcnow()
+            db_session.updated_at = utc_now()
             session.commit()
             return True
         except Exception as e:

@@ -1,7 +1,7 @@
 import json
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional
 
 from .nostr_client import NostrClient, NostrEvent, ActionIntent, SigningResponse, get_nostr_client
@@ -10,6 +10,10 @@ from core.config import Config
 from redis import Redis
 
 logger = logging.getLogger(__name__)
+
+def utc_now() -> datetime:
+    """Return current UTC time as a naive datetime (UTC) without deprecation warnings."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 class NostrEventHandler:
     def __init__(self, nostr_client: NostrClient):
@@ -72,7 +76,7 @@ class NostrEventHandler:
                 'user_pubkey': action_intent.user_pubkey,
                 'session_type': action_intent.session_type,
                 'intent_data': action_intent.intent_data,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             })
 
             logger.info(f"Successfully processed Action Intent, created session {session_id}")
@@ -122,7 +126,7 @@ class NostrEventHandler:
                 'challenge_id': signing_response.challenge_id,
                 'user_pubkey': signing_response.user_pubkey,
                 'signature': signing_response.signature,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             })
 
             logger.info(f"Successfully processed Signing Response for session {session.session_id}")
@@ -181,7 +185,7 @@ class NostrEventHandler:
                 return False
 
             # Check if challenge is expired
-            if datetime.utcnow() > challenge.expires_at:
+            if utc_now() > challenge.expires_at:
                 logger.warning(f"Challenge {signing_response.challenge_id} expired")
                 return False
 
@@ -203,7 +207,7 @@ class NostrEventHandler:
         session = get_session()
         try:
             # Calculate expiration time
-            expires_at = datetime.utcnow() + timedelta(minutes=Config.SESSION_TIMEOUT_MINUTES)
+            expires_at = utc_now() + timedelta(minutes=Config.SESSION_TIMEOUT_MINUTES)
 
             # Create human-readable context
             context = self._generate_context(action_intent)

@@ -2,11 +2,15 @@ from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, F
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.dialects.mysql import JSON
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 from core.config import Config
 
 Base = declarative_base()
+
+def utc_now() -> datetime:
+    """Return current UTC time as a naive datetime (UTC) without deprecation warnings."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 class JobLog(Base):
     __tablename__ = 'job_logs'
@@ -17,8 +21,8 @@ class JobLog(Base):
     status = Column(String(20), nullable=False)  # pending, running, completed, failed
     message = Column(Text)
     result_data = Column(Text)  # JSON string for results
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     duration_seconds = Column(Float)
 
 class SystemMetrics(Base):
@@ -30,7 +34,7 @@ class SystemMetrics(Base):
     memory_available_mb = Column(Float, nullable=False)
     disk_percent = Column(Float, nullable=False)
     disk_free_gb = Column(Float, nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=utc_now)
 
 class Heartbeat(Base):
     __tablename__ = 'heartbeats'
@@ -38,7 +42,7 @@ class Heartbeat(Base):
     id = Column(Integer, primary_key=True)
     service_name = Column(String(50), nullable=False)
     is_alive = Column(Boolean, default=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=utc_now)
     message = Column(String(200))
 
 # Ark Relay Models
@@ -55,7 +59,7 @@ class Vtxo(Base):
     asset_id = Column(String(64), ForeignKey('assets.asset_id'))
     user_pubkey = Column(String(66), nullable=False)
     status = Column(String(20), default='available')  # available, assigned, spent, expired
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     expires_at = Column(DateTime, nullable=False)
     spending_txid = Column(String(64), nullable=True)
 
@@ -72,7 +76,7 @@ class Asset(Base):
     decimal_places = Column(Integer, default=8)
     total_supply = Column(BigInteger, default=0)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     asset_metadata = Column('metadata', JSON, nullable=True)  # Additional asset metadata
 
     vtxos = relationship("Vtxo", back_populates="asset")
@@ -86,7 +90,7 @@ class AssetBalance(Base):
     asset_id = Column(String(64), ForeignKey('assets.asset_id'), nullable=False)
     balance = Column(BigInteger, default=0)
     reserved_balance = Column(BigInteger, default=0)
-    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_updated = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     asset = relationship("Asset", back_populates="balances")
 
@@ -104,8 +108,8 @@ class SigningSession(Base):
     status = Column(String(20), default='initiated')  # initiated, challenge_sent, waiting_response, signing, completed, failed, expired
     intent_data = Column(JSON, nullable=False)  # Original intent data
     context = Column(Text, nullable=True)  # Human-readable context
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     expires_at = Column(DateTime, nullable=False)
     signed_tx = Column(Text, nullable=True)  # Hex-encoded signed transaction
     result_data = Column(JSON, nullable=True)  # Final transaction details
@@ -145,7 +149,7 @@ class SigningChallenge(Base):
     challenge_data = Column(LargeBinary, nullable=False)  # Binary challenge data
     context = Column(Text, nullable=False)  # Human-readable context
     expires_at = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     is_used = Column(Boolean, default=False)
     signature = Column(LargeBinary, nullable=True)  # User's signature response
 
@@ -168,7 +172,7 @@ class Transaction(Base):
     status = Column(String(20), default='pending')  # pending, broadcast, confirmed, failed
     amount_sats = Column(BigInteger, nullable=False)
     fee_sats = Column(BigInteger, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     confirmed_at = Column(DateTime, nullable=True)
     block_height = Column(Integer, nullable=True)
     error_message = Column(Text, nullable=True)
@@ -186,7 +190,7 @@ class LightningInvoice(Base):
     asset_id = Column(String(64), ForeignKey('assets.id'), nullable=True)
     status = Column(String(20), default='pending')  # pending, paid, expired, cancelled
     invoice_type = Column(String(10), nullable=False)  # lift, land
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     expires_at = Column(DateTime, nullable=False)
     paid_at = Column(DateTime, nullable=True)
     preimage = Column(String(64), nullable=True)
