@@ -19,7 +19,7 @@ def test_db_session():
     _os.close(fd)
     engine = create_engine(f'sqlite:///{db_path}', echo=False, connect_args={'check_same_thread': False})
     Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine)
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     session = SessionLocal()
     # Attach the engine so other fixtures can create new sessions bound to the same DB
     setattr(session, "_engine", engine)
@@ -320,14 +320,21 @@ def patch_get_session(test_db_session):
     from unittest.mock import patch
 
     engine = getattr(test_db_session, "_engine", None)
-    SessionLocal = sessionmaker(bind=engine) if engine is not None else None
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False) if engine is not None else None
 
     def _new_session():
+        # Return a new Session per call bound to the same per-test engine
         return SessionLocal() if SessionLocal else test_db_session
 
-    with patch('core.models.get_session', side_effect=_new_session), \
-         patch('core.asset_manager.get_session', side_effect=_new_session), \
-         patch('core.session_manager.get_session', side_effect=_new_session):
+    with (
+        patch('core.models.get_session', side_effect=_new_session),
+        # Asset manager should use the shared per-test Session so object state is consistent across calls
+        patch('core.asset_manager.get_session', new=lambda: test_db_session),
+        patch('core.session_manager.get_session', side_effect=_new_session),
+        patch('builtins.get_session', new=lambda: test_db_session),
+        patch('tests.test_transaction_processor.test_engine', new=engine),
+        patch('tests.test_transaction_processor.TestSession', new=lambda: test_db_session),
+    ):
         yield
 
 

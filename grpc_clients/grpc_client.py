@@ -126,8 +126,14 @@ class GrpcClientBase(ABC):
             # Create channel
             if self.config.tls_cert:
                 # TLS connection
-                with open(self.config.tls_cert, 'rb') as f:
+                f = open(self.config.tls_cert, 'rb')
+                try:
                     cert = f.read()
+                finally:
+                    try:
+                        f.close()
+                    except Exception:
+                        pass
                 credentials = grpc.ssl_channel_credentials(cert)
                 self.channel = grpc.secure_channel(
                     f"{self.config.host}:{self.config.port}",
@@ -184,7 +190,8 @@ class GrpcClientBase(ABC):
     def health_check(self) -> bool:
         """Check if service is healthy"""
         try:
-            return self._execute_with_retry(self._health_check_impl)
+            # Ensure strict boolean return even if underlying call returns a truthy value
+            return bool(self._execute_with_retry(self._health_check_impl))
         except Exception as e:
             logger.error(f"Health check failed for {self.service_type.value}: {e}")
             return False
