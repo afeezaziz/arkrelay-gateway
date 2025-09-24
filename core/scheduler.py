@@ -4,7 +4,13 @@ from datetime import datetime, timezone
 import time
 import logging
 import os
-from tasks import log_system_stats, send_heartbeat, cleanup_old_logs, cleanup_expired_sessions, cleanup_vtxos
+from core.tasks import (
+    log_system_stats,
+    send_heartbeat,
+    cleanup_old_logs,
+    cleanup_expired_sessions,
+    cleanup_vtxos,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -5,6 +5,7 @@ from rq_scheduler import Scheduler
 from datetime import datetime, timedelta
 import os
 import json
+from threading import Lock
 from core.models import JobLog, SystemMetrics, Heartbeat, get_session
 from grpc_clients import get_grpc_manager, ServiceType
 from nostr_clients.nostr_client import get_nostr_client, initialize_nostr_client, shutdown_nostr_client
@@ -35,6 +36,33 @@ app.register_blueprint(admin_bp)
 # Initialize Lightning services
 lightning_manager = None
 lightning_monitor = None
+_lightning_init_lock = Lock()
+
+def ensure_lightning_services() -> bool:
+    """Ensure Lightning services are initialized in this process.
+    Safe to call from web workers; uses a lock to avoid duplicate init.
+    """
+    global lightning_manager, lightning_monitor
+    if lightning_manager and lightning_monitor:
+        return True
+    with _lightning_init_lock:
+        if lightning_manager and lightning_monitor:
+            return True
+        try:
+            grpc_manager = get_grpc_manager()
+            lnd_client = grpc_manager.get_client(ServiceType.LND)
+
+            if not lnd_client:
+                return False
+
+            lightning_manager = LightningManager(lnd_client)
+            lightning_monitor = LightningMonitor(lightning_manager)
+            lightning_monitor.start_monitoring()
+            print("✅ Lightning services initialized on-demand")
+            return True
+        except Exception as e:
+            print(f"❌ Failed to initialize Lightning services on-demand: {e}")
+            return False
 
 # Initialize VTXO services
 vtxo_manager = None
@@ -193,7 +221,7 @@ def queue_status():
 
 @app.route('/enqueue-demo')
 def enqueue_demo():
-    job = q.enqueue('tasks.sample_task', args=['Demo job from web'], job_timeout=60, result_ttl=3600)
+    job = q.enqueue('core.tasks.sample_task', args=['Demo job from web'], job_timeout=60, result_ttl=3600)
     return jsonify({
         'message': 'Job enqueued',
         'job_id': job.id,
@@ -209,7 +237,7 @@ def enqueue_user_process():
     user_data = data.get('data', {})
 
     job = q.enqueue(
-        'tasks.process_user_data',
+        'core.tasks.process_user_data',
         args=[user_id, action_type, user_data],
         job_timeout=120,
         job_id=f"user_{user_id}_{action_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
@@ -1485,7 +1513,7 @@ def get_reserve_requirements(asset_id):
 def create_lightning_lift():
     """Create a Lightning lift (on-ramp) operation"""
     try:
-        if not lightning_manager:
+        if not ensure_lightning_services():
             return jsonify({'error': 'Lightning services not available'}), 503
 
         data = request.get_json()
@@ -1532,7 +1560,7 @@ def create_lightning_lift():
 def process_lightning_land():
     """Process a Lightning land (off-ramp) operation"""
     try:
-        if not lightning_manager:
+        if not ensure_lightning_services():
             return jsonify({'error': 'Lightning services not available'}), 503
 
         data = request.get_json()
@@ -1579,7 +1607,7 @@ def process_lightning_land():
 def get_invoice_status(payment_hash):
     """Get the status of a Lightning invoice"""
     try:
-        if not lightning_manager:
+        if not ensure_lightning_services():
             return jsonify({'error': 'Lightning services not available'}), 503
 
         status = lightning_manager.check_invoice_status(payment_hash)
@@ -1599,7 +1627,7 @@ def get_invoice_status(payment_hash):
 def pay_lightning_invoice(payment_hash):
     """Pay a Lightning invoice (for land operations)"""
     try:
-        if not lightning_manager:
+        if not ensure_lightning_services():
             return jsonify({'error': 'Lightning services not available'}), 503
 
         result = lightning_manager.pay_lightning_invoice(payment_hash)
@@ -1626,7 +1654,7 @@ def pay_lightning_invoice(payment_hash):
 def get_lightning_balances():
     """Get Lightning balance information"""
     try:
-        if not lightning_manager:
+        if not ensure_lightning_services():
             return jsonify({'error': 'Lightning services not available'}), 503
 
         balances = lightning_manager.get_lightning_balances()
@@ -1646,7 +1674,7 @@ def get_lightning_balances():
 def list_lightning_channels():
     """List Lightning channels"""
     try:
-        if not lightning_manager:
+        if not ensure_lightning_services():
             return jsonify({'error': 'Lightning services not available'}), 503
 
         lnd_client = lightning_manager.lnd_client
@@ -1677,7 +1705,7 @@ def list_lightning_channels():
 def estimate_lightning_fees(amount_sats):
     """Estimate Lightning fees for a given amount"""
     try:
-        if not lightning_manager:
+        if not ensure_lightning_services():
             return jsonify({'error': 'Lightning services not available'}), 503
 
         fees = lightning_manager.estimate_lightning_fees(amount_sats)
@@ -1697,7 +1725,7 @@ def estimate_lightning_fees(amount_sats):
 def get_user_lightning_activity(user_pubkey):
     """Get user's Lightning activity history"""
     try:
-        if not lightning_manager:
+        if not ensure_lightning_services():
             return jsonify({'error': 'Lightning services not available'}), 503
 
         limit = request.args.get('limit', 50, type=int)
@@ -1717,7 +1745,7 @@ def get_user_lightning_activity(user_pubkey):
 def get_lightning_statistics():
     """Get Lightning operation statistics"""
     try:
-        if not lightning_monitor:
+        if not ensure_lightning_services() or not lightning_monitor:
             return jsonify({'error': 'Lightning monitor not available'}), 503
 
         hours = request.args.get('hours', 24, type=int)
@@ -1738,7 +1766,7 @@ def get_lightning_statistics():
 def get_lightning_monitor_health():
     """Get Lightning monitor health status"""
     try:
-        if not lightning_monitor:
+        if not ensure_lightning_services() or not lightning_monitor:
             return jsonify({'error': 'Lightning monitor not available'}), 503
 
         health = lightning_monitor.health_check()
@@ -1755,7 +1783,7 @@ def get_lightning_monitor_health():
 def list_lightning_invoices():
     """List Lightning invoices with filtering"""
     try:
-        if not lightning_manager:
+        if not ensure_lightning_services():
             return jsonify({'error': 'Lightning services not available'}), 503
 
         lnd_client = lightning_manager.lnd_client
@@ -1787,7 +1815,7 @@ def list_lightning_invoices():
 def list_lightning_payments():
     """List Lightning payments"""
     try:
-        if not lightning_manager:
+        if not ensure_lightning_services():
             return jsonify({'error': 'Lightning services not available'}), 503
 
         lnd_client = lightning_manager.lnd_client

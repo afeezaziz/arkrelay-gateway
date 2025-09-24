@@ -12,15 +12,23 @@ services:
       - SECRET_KEY=dev-secret-key-only-for-testing
       - LOG_LEVEL=DEBUG
       - BITCOIN_NETWORK=regtest
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
     ports:
       - "8000:8000"
     depends_on:
       - mariadb
       - redis
     volumes:
-      - ./logs:/app/logs
-      - .:/app
-    command: python -m gunicorn app:app --bind 0.0.0.0:8000 --workers 1 --reload
+      - ./logs:/usr/src/app/logs
+      - .:/usr/src/app
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/ready || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: /bin/sh -c "alembic upgrade head && python -m gunicorn app:app --bind 0.0.0.0:8000 --workers 1 --reload"
 
   worker:
     build: .
@@ -31,13 +39,21 @@ services:
       - FLASK_ENV=development
       - SECRET_KEY=dev-secret-key-only-for-testing
       - LOG_LEVEL=DEBUG
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
     depends_on:
       - mariadb
       - redis
     volumes:
-      - ./logs:/app/logs
-      - .:/app
-    command: rq worker --url ${REDIS_URL}
+      - ./logs:/usr/src/app/logs
+      - .:/usr/src/app
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import os,sys; from redis import Redis; sys.exit(0) if Redis.from_url(os.getenv(\"REDIS_URL\")).ping() else sys.exit(1)' "]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: /bin/sh -c "alembic upgrade head && rq worker --url ${REDIS_URL}"
 
   scheduler:
     build: .
@@ -48,13 +64,21 @@ services:
       - FLASK_ENV=development
       - SECRET_KEY=dev-secret-key-only-for-testing
       - LOG_LEVEL=DEBUG
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
     depends_on:
       - mariadb
       - redis
     volumes:
-      - ./logs:/app/logs
-      - .:/app
-    command: python scheduler.py
+      - ./logs:/usr/src/app/logs
+      - .:/usr/src/app
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import os,sys; from redis import Redis; sys.exit(0) if Redis.from_url(os.getenv(\"REDIS_URL\")).ping() else sys.exit(1)' "]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: /bin/sh -c "alembic upgrade head && python -m core.scheduler"
 
   mariadb:
     image: mariadb:10.11
@@ -74,6 +98,30 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+
+  services:
+    build: .
+    environment:
+      - SERVICE_TYPE=services
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - FLASK_ENV=development
+      - SECRET_KEY=dev-secret-key-only-for-testing
+      - LOG_LEVEL=DEBUG
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
+      - MONITORING_AUTO_START=true
+      - PERFORMANCE_OPTIMIZATION=true
+      - LIGHTNING_AUTO_START=${LIGHTNING_AUTO_START:-false}
+      - NOSTR_AUTO_START=${NOSTR_AUTO_START:-false}
+      - VTXO_AUTO_START=${VTXO_AUTO_START:-false}
+    depends_on:
+      - mariadb
+      - redis
+    volumes:
+      - ./logs:/usr/src/app/logs
+      - .:/usr/src/app
+    restart: always
+    command: /bin/sh -c "alembic upgrade head && python -m core.services_runner"
 
 volumes:
   mariadb_data:

@@ -22,6 +22,16 @@ A Flask-based gateway service for managing background tasks, scheduling, and sys
 - **Database**: MariaDB for persistent storage
 - **Queue**: Redis for job queuing and scheduling
 
+## For Solver Builders
+
+If you're building a DeFi solver service (Aave-like lending, Uniswap-like AMM) that uses this gateway for signing and settlement, start here:
+
+- Solver Guide: see `SOLVER.md`
+- Solver Integration Contract (events + minimal HTTP): see `SOLVERINTEGRATION.md`
+- DeFi Developers Guide (designing protocols on the primitives): see `DEFIGUIDE.md`
+
+An example skeleton is available under `examples/solver/` to help you bootstrap a solver that subscribes to 31510 intents, requests signing challenges, and finalizes via gateway endpoints.
+
 ## Installation
 
 ### Prerequisites
@@ -269,3 +279,51 @@ Add your license information here.
 ## Support
 
 For issues and questions, please create an issue in the repository.
+
+---
+
+## Production Deployment
+
+The repository includes a production-oriented `docker-compose.yml` with:
+
+- Web/API via Gunicorn (`web`)
+- Background workers via RQ (`worker`)
+- Periodic scheduler (`scheduler`)
+- Background services initializer (`services`) to start monitoring/Lightning/Nostr/VTXO outside of Gunicorn workers
+- Nginx reverse proxy with TLS termination and admin rate limiting (`nginx`)
+
+### Prerequisites
+
+- Populate a `.env` with at least:
+  - `DATABASE_URL`, `REDIS_URL`, `SECRET_KEY`
+  - `ADMIN_API_KEY`
+  - Optional service toggles: `LIGHTNING_AUTO_START`, `NOSTR_AUTO_START`, `VTXO_AUTO_START`
+
+- Provide TLS certs for Nginx at `deploy/nginx/certs/`:
+  - `fullchain.pem`
+  - `privkey.pem`
+
+For local testing, you can use self-signed certs. For production, use a CA-issued cert (e.g., Let’s Encrypt).
+
+### Start
+
+```bash
+docker compose up -d --build
+```
+
+All containers run `alembic upgrade head` at start to ensure the DB schema is current.
+
+### Healthchecks
+
+- API: `GET /ready`
+- Worker/Scheduler: Redis ping-based healthchecks are configured in Compose.
+
+### Admin Endpoints
+
+- All `/admin/*` routes require header `X-Admin-Key: <ADMIN_API_KEY>`
+- Nginx applies a simple rate limit to `/admin/*`. Adjust `deploy/nginx/default.conf` as needed.
+
+### Notes
+
+- The `services` container runs `core/services_runner.py`, which calls `initialize_services()` to start background threads (monitoring, Lightning, Nostr, VTXO). This avoids duplicate threads across multiple Gunicorn workers.
+- Lightning endpoints lazily initialize services on-demand as a fallback.

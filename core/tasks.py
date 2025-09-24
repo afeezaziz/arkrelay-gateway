@@ -281,7 +281,7 @@ def enqueue_vtxo_replenishment(asset_id: str, count: int):
     q = Queue(connection=redis_conn)
 
     job = q.enqueue(
-        'tasks.process_vtxo_replenishment',
+        'core.tasks.process_vtxo_replenishment',
         args=[asset_id, count],
         job_timeout=300,  # 5 minutes timeout
         job_id=f"vtxo_replenishment_{asset_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",

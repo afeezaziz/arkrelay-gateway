@@ -1,0 +1,574 @@
+openapi: 3.0.3
+info:
+  title: ArkRelay Gateway API
+  version: 1.0.0
+  description: Minimal OpenAPI spec enumerating all HTTP endpoints. Schemas can be enriched later.
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+components:
+  securitySchemes:
+    AdminApiKey:
+      type: apiKey
+      in: header
+      name: X-Admin-Key
+      description: Admin API key required for all /admin endpoints
+paths:
+  /:
+    get:
+      summary: Welcome and service info
+      responses:
+        '200': { description: OK }
+  /health:
+    get:
+      summary: Basic health check
+      responses:
+        '200': { description: OK }
+  /ready:
+    get:
+      summary: Readiness probe
+      responses:
+        '200': { description: OK }
+        '503': { description: Not ready }
+  /health/comprehensive:
+    get:
+      summary: Comprehensive health via monitoring system
+      responses:
+        '200': { description: OK }
+        '503': { description: Monitoring not initialized }
+  /queue-status:
+    get:
+      summary: Queue and worker status
+      responses:
+        '200': { description: OK }
+  /enqueue-demo:
+    get:
+      summary: Enqueue a demo job
+      responses:
+        '200': { description: OK }
+  /enqueue-user-process:
+    post:
+      summary: Enqueue a per-user processing job
+      responses:
+        '200': { description: OK }
+  /jobs:
+    get:
+      summary: List recent jobs
+      responses:
+        '200': { description: OK }
+  /jobs/{job_id}:
+    get:
+      summary: Get job by ID
+      responses:
+        '200': { description: OK }
+        '404': { description: Not found }
+  /metrics:
+    get:
+      summary: Recent system metrics
+      responses:
+        '200': { description: OK }
+  /monitoring/stats:
+    get:
+      summary: Monitoring performance stats
+      responses:
+        '200': { description: OK }
+        '503': { description: Monitoring not initialized }
+  /monitoring/alerts:
+    get:
+      summary: Active monitoring alerts
+      responses:
+        '200': { description: OK }
+        '503': { description: Monitoring not initialized }
+  /monitoring/cache/stats:
+    get:
+      summary: Cache performance stats
+      responses:
+        '200': { description: OK }
+        '503': { description: Cache manager not initialized }
+  /heartbeats:
+    get:
+      summary: Recent service heartbeats
+      responses:
+        '200': { description: OK }
+  /grpc/arkd/info:
+    get:
+      summary: ARKD service information
+      responses:
+        '200': { description: OK }
+        '503': { description: ARKD client unavailable }
+  /grpc/tapd/balances:
+    get:
+      summary: TAPD asset balances
+      responses:
+        '200': { description: OK }
+        '503': { description: TAPD client unavailable }
+  /grpc/lnd/balances:
+    get:
+      summary: LND balances
+      responses:
+        '200': { description: OK }
+        '503': { description: LND client unavailable }
+  /grpc/reconnect/{service}:
+    get:
+      summary: Reconnect to a gRPC service
+      responses:
+        '200': { description: OK }
+        '400': { description: Invalid service }
+  /stats:
+    get:
+      summary: Summary stats (jobs, queue, metrics, gRPC)
+      responses:
+        '200': { description: OK }
+  /nostr/start:
+    post:
+      summary: Start Nostr service
+      responses:
+        '200': { description: OK }
+  /nostr/stop:
+    post:
+      summary: Stop Nostr service
+      responses:
+        '200': { description: OK }
+  /nostr/status:
+    get:
+      summary: Nostr service status
+      responses:
+        '200': { description: OK }
+  /nostr/send-dm:
+    post:
+      summary: Send encrypted DM
+      responses:
+        '200': { description: OK }
+        '400': { description: Bad request or service not running }
+  /nostr/publish-test:
+    post:
+      summary: Publish test event
+      responses:
+        '200': { description: OK }
+        '400': { description: Service not running }
+  /nostr/relays:
+    get:
+      summary: Configured Nostr relays
+      responses:
+        '200': { description: OK }
+  /nostr/test-encryption:
+    post:
+      summary: Test encryption/decryption
+      responses:
+        '200': { description: OK }
+        '400': { description: Service not running }
+  /nostr/sessions:
+    get:
+      summary: Active Nostr signing sessions
+      responses:
+        '200': { description: OK }
+  /sessions/create:
+    post:
+      summary: Create a signing session
+      responses:
+        '200': { description: OK }
+        '400': { description: Invalid input }
+  /sessions/{session_id}:
+    get:
+      summary: Get session info
+      responses:
+        '200': { description: OK }
+        '404': { description: Not found }
+  /sessions/{session_id}/challenge:
+    post:
+      summary: Create signing challenge
+      responses:
+        '200': { description: OK }
+        '400': { description: Invalid state }
+        '404': { description: Session not found }
+  /sessions/{session_id}/respond:
+    post:
+      summary: Respond to challenge
+      responses:
+        '200': { description: OK }
+        '400': { description: Invalid signature or challenge }
+  /sessions/{session_id}/complete:
+    post:
+      summary: Complete a session
+      responses:
+        '200': { description: OK }
+  /sessions/{session_id}/fail:
+    post:
+      summary: Mark a session as failed
+      responses:
+        '200': { description: OK }
+  /sessions:
+    get:
+      summary: List sessions (optional filters)
+      responses:
+        '200': { description: OK }
+  /sessions/cleanup:
+    post:
+    
+      summary: Cleanup expired sessions and challenges
+      responses:
+        '200': { description: OK }
+  /challenges/{challenge_id}:
+    get:
+      summary: Get challenge info
+      responses:
+        '200': { description: OK }
+        '404': { description: Not found }
+  /sessions/stats:
+    get:
+      summary: Get sessions statistics
+      responses:
+        '200': { description: OK }
+  /transactions/p2p-transfer:
+    post:
+      summary: Process P2P transfer transaction
+      responses:
+        '200': { description: OK }
+        '400': { description: Missing session_id }
+  /transactions/{txid}/status:
+    get:
+      summary: Get transaction status
+      responses:
+        '200': { description: OK }
+        '404': { description: Not found }
+  /transactions/{txid}/broadcast:
+    post:
+      summary: Broadcast a transaction to the network
+      responses:
+        '200': { description: OK }
+  /transactions/user/{user_pubkey}:
+    get:
+      summary: Get transactions for a user
+      responses:
+        '200': { description: OK }
+  /signing/ceremony/start:
+    post:
+      summary: Start signing ceremony
+      responses:
+        '200': { description: OK }
+        '400': { description: Missing session_id }
+  /signing/ceremony/{session_id}/status:
+    get:
+      summary: Get signing ceremony status
+      responses:
+        '200': { description: OK }
+  /signing/ceremony/{session_id}/step/{step}:
+    post:
+      summary: Execute a signing ceremony step
+      responses:
+        '200': { description: OK }
+        '400': { description: Invalid step }
+  /signing/ceremony/{session_id}/cancel:
+    post:
+      summary: Cancel a signing ceremony
+      responses:
+        '200': { description: OK }
+  /assets:
+    post:
+      summary: Create asset
+      responses:
+        '200': { description: OK }
+        '400': { description: Missing fields }
+    get:
+      summary: List assets
+      responses:
+        '200': { description: OK }
+  /assets/{asset_id}:
+    get:
+      summary: Get asset info
+      responses:
+        '200': { description: OK }
+        '404': { description: Not found }
+  /assets/{asset_id}/mint:
+    post:
+      summary: Mint assets to a user
+      responses:
+        '200': { description: OK }
+        '400': { description: Missing fields }
+  /assets/transfer:
+    post:
+      summary: Transfer assets between users
+      responses:
+        '200': { description: OK }
+        '400': { description: Missing fields }
+  /balances/{user_pubkey}:
+    get:
+      summary: Get all balances for a user
+      responses:
+        '200': { description: OK }
+  /balances/{user_pubkey}/{asset_id}:
+    get:
+      summary: Get balance for a specific asset
+      responses:
+        '200': { description: OK }
+  /vtxos/{user_pubkey}:
+    get:
+      summary: Manage/list VTXOs for user
+      responses:
+        '200': { description: OK }
+  /assets/stats:
+    get:
+      summary: Asset statistics
+    
+      responses:
+        '200': { description: OK }
+  /assets/cleanup-vtxos:
+    post:
+      summary: Cleanup expired VTXOs via asset manager
+      responses:
+        '200': { description: OK }
+  /assets/{asset_id}/reserve:
+    get:
+      summary: Reserve requirements for asset
+      responses:
+        '200': { description: OK }
+  /lightning/lift:
+    post:
+      summary: Create Lightning lift (on-ramp)
+      responses:
+        '200': { description: OK }
+        '400': { description: Invalid input }
+        '503': { description: Lightning unavailable }
+  /lightning/land:
+    post:
+      summary: Process Lightning land (off-ramp)
+      responses:
+        '200': { description: OK }
+        '400': { description: Invalid input }
+        '503': { description: Lightning unavailable }
+  /lightning/invoices/{payment_hash}:
+    get:
+      summary: Get Lightning invoice status
+      responses:
+        '200': { description: OK }
+        '404': { description: Not found }
+  /lightning/pay/{payment_hash}:
+    post:
+      summary: Pay Lightning invoice (land)
+      responses:
+        '200': { description: OK }
+        '400': { description: Invalid request }
+        '503': { description: Lightning unavailable }
+  /lightning/balances:
+    get:
+      summary: Get Lightning balances
+      responses:
+        '200': { description: OK }
+        '503': { description: Lightning unavailable }
+  /lightning/channels:
+    get:
+      summary: List Lightning channels
+      responses:
+        '200': { description: OK }
+        '503': { description: Lightning unavailable }
+  /lightning/fees/estimate/{amount_sats}:
+    get:
+      summary: Estimate Lightning fees
+      responses:
+        '200': { description: OK }
+        '503': { description: Lightning unavailable }
+  /lightning/activity/{user_pubkey}:
+    get:
+      summary: Get user Lightning activity
+      responses:
+        '200': { description: OK }
+        '503': { description: Lightning unavailable }
+  /lightning/statistics:
+    get:
+      summary: Lightning operation statistics
+      responses:
+        '200': { description: OK }
+        '503': { description: Lightning monitor unavailable }
+  /lightning/monitor/health:
+    get:
+      summary: Lightning monitor health
+      responses:
+        '200': { description: OK }
+        '503': { description: Lightning monitor unavailable }
+  /lightning/invoices:
+    get:
+      summary: List Lightning invoices
+      responses:
+        '200': { description: OK }
+        '503': { description: Lightning unavailable }
+  /lightning/payments:
+    get:
+      summary: List Lightning payments
+      responses:
+        '200': { description: OK }
+        '503': { description: Lightning unavailable }
+  /vtxos/inventory/{asset_id}:
+    get:
+      summary: Get VTXO inventory status for asset
+      responses:
+        '200': { description: OK }
+  /vtxos/batch/create:
+    post:
+      summary: Create a batch of new VTXOs
+      responses:
+        '200': { description: OK }
+        '400': { description: Missing fields }
+  /vtxos/assign:
+    post:
+      summary: Assign a VTXO to a user
+      responses:
+        '200': { description: OK }
+        '404': { description: No available VTXO }
+  /vtxos/user/{user_pubkey}:
+    get:
+      summary: Get VTXOs assigned to user
+      responses:
+        '200': { description: OK }
+  /vtxos/mark-spent:
+    post:
+      summary: Mark VTXO as spent
+      responses:
+        '200': { description: OK }
+  /vtxos/cleanup:
+    post:
+      summary: Cleanup expired VTXOs
+      responses:
+        '200': { description: OK }
+  /vtxos/settlement/process:
+    post:
+      summary: Trigger VTXO settlement processing
+      responses:
+        '200': { description: OK }
+  /vtxos/settlement/status:
+    get:
+      summary: Get settlement status
+      responses:
+        '200': { description: OK }
+  /vtxos/monitor/start:
+    post:
+      summary: Start VTXO monitoring services
+      responses:
+        '200': { description: OK }
+  /vtxos/monitor/stop:
+    post:
+      summary: Stop VTXO monitoring services
+      responses:
+        '200': { description: OK }
+  /vtxos/monitor/status:
+    get:
+      summary: VTXO monitoring status
+      responses:
+        '200': { description: OK }
+  /vtxos/stats:
+    get:
+      summary: VTXO statistics
+      responses:
+        '200': { description: OK }
+  /admin/health/comprehensive:
+    get:
+      summary: Comprehensive health (admin)
+      security:
+        - AdminApiKey: []
+      responses:
+        '200': { description: OK }
+  /admin/metrics/system:
+    get:
+      summary: System metrics (admin)
+      security:
+        - AdminApiKey: []
+      responses:
+        '200': { description: OK }
+  /admin/alerts:
+    get:
+      summary: Active and recent alerts (admin)
+      security:
+        - AdminApiKey: []
+      responses:
+        '200': { description: OK }
+  /admin/alerts/rules:
+    get:
+      summary: Alert rules (admin)
+      security:
+        - AdminApiKey: []
+      responses:
+        '200': { description: OK }
+  /admin/alerts/rules/{rule_name}/toggle:
+    post:
+      summary: Enable/disable an alert rule (admin)
+      security:
+        - AdminApiKey: []
+      responses:
+        '200': { description: OK }
+        '404': { description: Rule not found }
+  /admin/jobs/statistics:
+    get:
+      summary: Job statistics (admin)
+      security:
+        - AdminApiKey: []
+      responses:
+        '200': { description: OK }
+  /admin/services/status:
+    get:
+      summary: Services status and queue (admin)
+      security:
+        - AdminApiKey: []
+      responses:
+        '200': { description: OK }
+  /admin/database/stats:
+    get:
+      summary: Database statistics (admin)
+      security:
+        - AdminApiKey: []
+      responses:
+        '200': { description: OK }
+  /admin/system/info:
+    get:
+      summary: Detailed system info (admin)
+      security:
+        - AdminApiKey: []
+      responses:
+        '200': { description: OK }
+  /admin/configuration:
+    get:
+      summary: Current configuration (admin)
+      security:
+        - AdminApiKey: []
+      responses:
+        '200': { description: OK }
+  /admin/logs/recent:
+    get:
+      summary: Recent application logs (admin)
+      security:
+        - AdminApiKey: []
+      responses:
+        '200': { description: OK }
+  /admin/maintenance/cleanup:
+    post:
+      summary: Clean up old data (admin)
+      security:
+        - AdminApiKey: []
+      responses:
+        '200': { description: OK }
+  /admin/backup/create:
+    post:
+      summary: Create a database backup (admin)
+      security:
+        - AdminApiKey: []
+      responses:
+        '200': { description: OK }
+  /admin/performance/profile:
+    post:
+      summary: Run performance profiling (admin)
+      security:
+        - AdminApiKey: []
+      responses:
+        '200': { description: OK }
+  /admin/restart/service:
+    post:
+      summary: Restart a specific service (admin)
+      security:
+        - AdminApiKey: []
+      responses:
+        '200': { description: OK }
+  /admin/dashboard/summary:
+    get:
+      summary: Dashboard summary (admin)
+      security:
+        - AdminApiKey: []
+      responses:
+        '200': { description: OK }

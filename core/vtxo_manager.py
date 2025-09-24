@@ -137,7 +137,7 @@ class VtxoInventoryMonitor:
             logger.info(f"🔄 Triggering VTXO replenishment for asset {asset_id}: {count} VTXOs")
 
             # Enqueue replenishment job
-            from tasks import enqueue_vtxo_replenishment
+            from core.tasks import enqueue_vtxo_replenishment
             enqueue_vtxo_replenishment(asset_id, count)
 
         except Exception as e:

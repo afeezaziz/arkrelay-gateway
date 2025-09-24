@@ -39,11 +39,18 @@ This guide is for operators and the internal team. It covers setup, day-to-day o
 - Run services
   - API: `gunicorn app:app -b 0.0.0.0:8000 --workers 4`
   - Workers: `rq worker --url $REDIS_URL`
-  - Scheduler: `python scheduler.py`
+  - Scheduler: `python -m core.scheduler`
+  - Services (background initializers): `python -m core.services_runner`
 - Docker (dev):
   ```bash
   docker compose -f docker-compose.dev.yml up --build
   ```
+
+- Docker (prod):
+  ```bash
+  docker compose up -d --build
+  ```
+  All services run `alembic upgrade head` prior to start.
 
 Service auto-starts (via `initialize_services()` in `app.py`):
 - Monitoring (`MONITORING_AUTO_START=true` by default)
@@ -61,6 +68,10 @@ Service auto-starts (via `initialize_services()` in `app.py`):
 - `GET /health/comprehensive` — full system health (monitoring must be running)
 - `GET /queue-status` — RQ stats
 - `GET /stats` — roll-up system stats
+
+Container healthchecks (Compose):
+- Worker: Redis ping-based healthcheck
+- Scheduler: Redis ping-based healthcheck
 
 If monitoring is running:
 - `GET /monitoring/stats`
@@ -184,6 +195,13 @@ Admin maintenance:
   - Liveness/readiness: `/ready` for probes
   - Logging to stdout; sidecar/agent for shipping
 - DB migrations: CI stage running `alembic upgrade head`
+
+### Reverse Proxy & TLS
+
+- An Nginx reverse proxy service is included in `docker-compose.yml` (`nginx`).
+- TLS certs must be mounted at `deploy/nginx/certs/` (`fullchain.pem`, `privkey.pem`).
+- Admin endpoints `/admin/*` are rate-limited at the proxy; application still enforces `X-Admin-Key`.
+- Adjust limits and headers in `deploy/nginx/default.conf`.
 
 ---
 

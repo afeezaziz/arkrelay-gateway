@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Float, Boolean, ForeignKey, BigInteger, LargeBinary
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.orm import sessionmaker, relationship, scoped_session
 from sqlalchemy.dialects.mysql import JSON
 from datetime import datetime, timezone
 import os
@@ -198,19 +198,27 @@ class LightningInvoice(Base):
     asset = relationship("Asset")
 
 # Database setup
+# Initialize a single global Engine and scoped session for the process
+_config = Config()
+engine = create_engine(
+    _config.DATABASE_URL,
+    pool_size=_config.DB_POOL_SIZE,
+    max_overflow=_config.DB_POOL_MAX_OVERFLOW,
+    pool_timeout=_config.DB_POOL_TIMEOUT,
+    pool_recycle=1800,
+    pool_pre_ping=True,
+)
+SessionLocal = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
+
 def get_database_url():
-    config = Config()
-    return config.DATABASE_URL
+    return _config.DATABASE_URL
 
 def create_tables():
-    engine = create_engine(get_database_url())
     Base.metadata.create_all(engine)
     return engine
 
 def get_session():
-    engine = create_engine(get_database_url())
-    Session = sessionmaker(bind=engine)
-    return Session()
+    return SessionLocal()
 
 # Expose a safe builtin alias for tests that call `get_session()` directly without import.
 # This wrapper resolves the current core.models.get_session at call time so pytest patches still apply.

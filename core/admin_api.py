@@ -20,6 +20,7 @@ from core.models import (
 )
 from core.monitoring import get_monitoring_system, PrometheusMetrics
 from core.config import Config
+import shutil
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -430,38 +431,40 @@ def get_system_info():
 def get_configuration():
     """Get current configuration (excluding sensitive data)"""
     try:
+        cfg = Config()
+
         config_data = {
             'app': {
-                'flask_env': Config.FLASK_ENV,
-                'app_port': Config.APP_PORT,
-                'app_host': Config.APP_HOST,
-                'service_type': Config.SERVICE_TYPE
+                'flask_env': cfg.FLASK_ENV,
+                'app_port': cfg.APP_PORT,
+                'app_host': cfg.APP_HOST,
+                'service_type': cfg.SERVICE_TYPE
             },
             'logging': {
-                'log_level': Config.LOG_LEVEL
+                'log_level': cfg.LOG_LEVEL
             },
             'network': {
-                'bitcoin_network': Config.BITCOIN_NETWORK
+                'bitcoin_network': cfg.BITCOIN_NETWORK
             },
             'monitoring': {
-                'enable_metrics': Config.ENABLE_METRICS,
-                'metrics_port': Config.METRICS_PORT
+                'enable_metrics': cfg.ENABLE_METRICS,
+                'metrics_port': cfg.METRICS_PORT
             },
             'session': {
-                'session_timeout_minutes': Config.SESSION_TIMEOUT_MINUTES,
-                'max_concurrent_sessions': Config.MAX_CONCURRENT_SESSIONS
+                'session_timeout_minutes': cfg.SESSION_TIMEOUT_MINUTES,
+                'max_concurrent_sessions': cfg.MAX_CONCURRENT_SESSIONS
             },
             'vtxo': {
-                'vtxo_expiration_hours': Config.VTXO_EXPIRATION_HOURS,
-                'vtxo_min_amount_sats': Config.VTXO_MIN_AMOUNT_SATS
+                'vtxo_expiration_hours': cfg.VTXO_EXPIRATION_HOURS,
+                'vtxo_min_amount_sats': cfg.VTXO_MIN_AMOUNT_SATS
             },
             'fees': {
-                'fee_sats_per_vbyte': Config.FEE_SATS_PER_VBYTE,
-                'fee_percentage': Config.FEE_PERCENTAGE
+                'fee_sats_per_vbyte': cfg.FEE_SATS_PER_VBYTE,
+                'fee_percentage': cfg.FEE_PERCENTAGE
             },
             'grpc': {
-                'grpc_max_message_length': Config.GRPC_MAX_MESSAGE_LENGTH,
-                'grpc_timeout_seconds': Config.GRPC_TIMEOUT_SECONDS
+                'grpc_max_message_length': cfg.GRPC_MAX_MESSAGE_LENGTH,
+                'grpc_timeout_seconds': cfg.GRPC_TIMEOUT_SECONDS
             }
         }
 
@@ -607,17 +610,24 @@ def create_backup():
 
         try:
             # For MySQL/MariaDB
-            if 'mysql' in Config.DATABASE_URL.lower():
+            cfg = Config()
+            db_url = cfg.DATABASE_URL
+            if 'mysql' in db_url.lower():
                 # Parse database URL
                 import urllib.parse as urlparse
-                parsed = urlparse.urlparse(Config.DATABASE_URL)
+                parsed = urlparse.urlparse(db_url)
                 db_name = parsed.path.lstrip('/')
 
+                # Prefer mysqldump, fallback to mariadb-dump
+                dump_tool = shutil.which('mysqldump') or shutil.which('mariadb-dump')
+                if not dump_tool:
+                    return jsonify({'error': 'Backup tool not found'}), 500
+
                 cmd = [
-                    'mysqldump',
-                    '--user=' + parsed.username,
-                    '--password=' + parsed.password,
-                    '--host=' + parsed.hostname,
+                    dump_tool,
+                    '--user=' + (parsed.username or ''),
+                    '--password=' + (parsed.password or ''),
+                    '--host=' + (parsed.hostname or 'localhost'),
                     '--port=' + str(parsed.port or 3306),
                     '--single-transaction',
                     '--routines',

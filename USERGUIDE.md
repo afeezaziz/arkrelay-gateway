@@ -132,6 +132,24 @@ Key environment variables:
 
 Base URL: `http://localhost:8000`
 
+### Solver Integration Contract (Minimal Gateway API)
+
+This gateway is intentionally thin. It should not host DeFi protocol endpoints or tables. Solvers (external services) implement protocol logic and use the gateway only for:
+
+- Nostr-based authorization and signing
+  - 31510 Intent (client → gateway)
+  - 31511 Challenge (gateway → wallet via encrypted DM)
+  - 31512 Response (wallet → gateway via encrypted DM)
+  - 31340 Confirmation (gateway → public)
+  - 31341 Failure (gateway → wallet DM)
+
+- Minimal helper HTTP endpoints
+  - Sessions/signing: `POST /sessions/create`, `POST /sessions/<session_id>/challenge`, `POST /sessions/<session_id>/respond`, `POST /signing/ceremony/start`, `GET /signing/ceremony/<session_id>/status`
+  - VTXO/settlement: `POST /vtxos/batch/create`, `POST /vtxos/assign`, `POST /vtxos/mark-spent`, `POST /vtxos/settlement/process`, `GET /vtxos/settlement/status`
+  - Optional rails: `POST /lightning/lift`, `POST /lightning/land`, `POST /lightning/pay/<payment_hash>`
+
+All DeFi-specific APIs (e.g., `lend/*`, `amm/*`) and data models (markets, positions, pools) must live in the solver service. See `DEFIGUIDE.md` and `SOLVERINTEGRATION.md`.
+
 ### Health and Status
 - `GET /` — Welcome/info
 - `GET /health` — Basic health
@@ -190,6 +208,7 @@ Step order (`SigningStep`):
 6. `finalization`
 
 ### Transactions (core/transaction_processor.py)
+Note: These are development/ops helpers for low-level transaction control and debugging. In production, protocol solvers should manage state and call the gateway only for signing/settlement.
 - `POST /transactions/p2p-transfer` — Prepare P2P transfer transaction
   - body: `{ "session_id": "..." }`
 - `GET /transactions/<txid>/status` — Get status
@@ -197,6 +216,7 @@ Step order (`SigningStep`):
 - `GET /transactions/user/<user_pubkey>` — User transactions
 
 ### Asset Management (core/asset_manager.py)
+Note: Dev/ops helpers for simple balances/transfers and VTXO utilities. Do not build DeFi protocol surfaces here; implement them in a separate solver service.
 - `POST /assets` — Create asset
 - `GET /assets` — List assets (`?active_only=true|false`)
 - `GET /assets/<asset_id>` — Asset info
