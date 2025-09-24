@@ -16,6 +16,9 @@ from typing import List, Dict, Any
 
 from core.config import Config
 
+# Import test database setup to enable patching
+from tests.test_database_setup import *
+
 
 class TestLoadTesting:
     """Enhanced load testing suite for Ark Relay Gateway"""
@@ -39,10 +42,10 @@ class TestLoadTesting:
     @pytest.fixture
     def mock_core_services(self):
         """Mock core services for load testing"""
-        with patch('grpc_clients.arkd_client.ArkClient') as mock_arkd, \
+        with patch('grpc_clients.arkd_client.ArkdClient') as mock_arkd, \
              patch('grpc_clients.lnd_client.LndClient') as mock_lnd, \
-             patch('grpc_clients.tapd_client.TapClient') as mock_tapd, \
-             patch('core.session_manager.SessionManager') as mock_session, \
+             patch('grpc_clients.tapd_client.TapdClient') as mock_tapd, \
+             patch('core.session_manager.SigningSessionManager') as mock_session, \
              patch('core.asset_manager.AssetManager') as mock_asset, \
              patch('core.transaction_processor.TransactionProcessor') as mock_tx_processor, \
              patch('core.signing_orchestrator.SigningOrchestrator') as mock_orchestrator:

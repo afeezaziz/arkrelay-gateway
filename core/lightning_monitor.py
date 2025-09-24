@@ -9,7 +9,7 @@ import logging
 import json
 import threading
 import time
-from typing import Dict, Any, List, Optional, Callable
+from typing import Dict, Any, List, Optional, Callable, Generator
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 
@@ -25,6 +25,18 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+
+def get_db() -> Generator[Session, None, None]:
+    """Yield a database session (generator style) for easy patching in tests.
+
+    Tests often patch lightning_monitor.get_db to inject a test session. Providing
+    this local generator avoids NameError and standardizes DB session management.
+    """
+    db = get_session()
+    try:
+        yield db
+    finally:
+        db.close()
 
 @dataclass
 class LightningEvent:

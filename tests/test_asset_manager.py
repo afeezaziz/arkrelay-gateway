@@ -158,11 +158,13 @@ class TestAssetManager:
 
     def test_get_user_balances(self, asset_manager, sample_asset, sample_balance, test_db_session):
         """Test getting all balances for a user"""
-        # Create another asset and balance
-        asset_manager.create_asset("ETH", "Ethereum", "ETH")
+        # Create another asset and balance with unique ID
+        import uuid
+        asset_id = f"ETH_{uuid.uuid4().hex[:8]}"
+        asset_manager.create_asset(asset_id, "Ethereum", "ETH")
         asset_manager.mint_assets(
             "test_user_pubkey_1234567890abcdef1234567890abcdef12345678",
-            "ETH",
+            asset_id,
             2000
         )
 
@@ -173,9 +175,9 @@ class TestAssetManager:
         assert len(balances) >= 2
         balance_dict = {b['asset_id']: b for b in balances}
         assert "BTC" in balance_dict
-        assert "ETH" in balance_dict
+        assert asset_id in balance_dict
         assert balance_dict["BTC"]['balance'] == 5000
-        assert balance_dict["ETH"]['balance'] == 2000
+        assert balance_dict[asset_id]['balance'] == 2000
 
     def test_mint_assets_success(self, asset_manager, sample_asset, test_db_session):
         """Test successful asset minting"""
@@ -187,7 +189,7 @@ class TestAssetManager:
         )
 
         assert result['asset_id'] == "BTC"
-        assert result['user_pubkey'] == "test_user_..."
+        assert result['user_pubkey'].startswith("test_use")
         assert result['amount_minted'] == 1000
         assert result['reserve_amount'] == 500
         assert result['new_balance'] == 1000

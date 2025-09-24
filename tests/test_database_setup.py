@@ -5,42 +5,50 @@ Test database setup utilities for consistent test database management
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+import tempfile
+import os as _os
 from core.models import Base
 import os
 
 
+@pytest.fixture(scope="function")
+def test_db_session():
+    """Create an isolated in-memory DB session per test, shared across threads."""
+    # Use a temporary file-based SQLite DB to allow multiple connections across threads safely
+    fd, db_path = tempfile.mkstemp(suffix=".sqlite")
+    _os.close(fd)
+    engine = create_engine(f'sqlite:///{db_path}', echo=False, connect_args={'check_same_thread': False})
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+    # Attach the engine so other fixtures can create new sessions bound to the same DB
+    setattr(session, "_engine", engine)
+    try:
+        yield session
+    finally:
+        session.close()
+        Base.metadata.drop_all(engine)
+        engine.dispose()
+        try:
+            _os.remove(db_path)
+        except Exception:
+            pass
+
+
+# Compatibility fixtures for imports in some tests (may not be used directly)
 @pytest.fixture(scope="session")
 def test_engine():
-    """Create test database engine"""
-    # Use in-memory SQLite for fast testing
+    """Provide a disposable engine for compatibility (not used by per-test session)."""
     engine = create_engine('sqlite:///:memory:', echo=False)
     return engine
 
 
 @pytest.fixture(scope="session")
 def test_tables(test_engine):
-    """Create all tables for testing"""
+    """Create/drop tables on the compatibility engine (for importers)."""
     Base.metadata.create_all(test_engine)
     yield
     Base.metadata.drop_all(test_engine)
-
-
-@pytest.fixture(scope="function")
-def test_db_session(test_engine, test_tables):
-    """Create a fresh database session for each test"""
-    from sqlalchemy.orm import Session
-
-    # Create a session with nested transaction support
-    session = Session(bind=test_engine)
-
-    # Begin transaction for rollback
-    session.begin_nested()
-
-    yield session
-
-    # Rollback any changes
-    session.rollback()
-    session.close()
 
 
 @pytest.fixture
@@ -302,33 +310,29 @@ def create_test_transaction(session, transaction_data=None):
 
 # Patch get_session to use test database
 @pytest.fixture(autouse=True)
-def patch_get_session(test_engine, test_tables):
-    """Patch get_session to use test database"""
+def patch_get_session(test_db_session):
+    """Patch get_session to always return the single per-test session.
+
+    Also patch core.asset_manager.get_session alias so methods that imported it
+    at module load use the same session. This avoids nested SAVEPOINT usage and
+    ensures that the db_connection rollback cleans up state per test.
+    """
     from unittest.mock import patch
-    from sqlalchemy.orm import sessionmaker
 
-    # Create a test session factory that uses our test engine
-    TestSession = sessionmaker(bind=test_engine)
+    engine = getattr(test_db_session, "_engine", None)
+    SessionLocal = sessionmaker(bind=engine) if engine is not None else None
 
-    def mock_get_session():
-        session = TestSession()
-        # Use SAVEPOINT for transaction isolation
-        session.begin_nested()
-        return session
+    def _new_session():
+        return SessionLocal() if SessionLocal else test_db_session
 
-    # Also need to patch the engine creation to use our test engine
-    def mock_create_engine(url, **kwargs):
-        return test_engine
-
-    # Patch both get_session and create_engine
-    with patch('core.models.get_session', side_effect=mock_get_session), \
-         patch('core.models.create_engine', side_effect=mock_create_engine):
+    with patch('core.models.get_session', side_effect=_new_session), \
+         patch('core.asset_manager.get_session', side_effect=_new_session), \
+         patch('core.session_manager.get_session', side_effect=_new_session):
         yield
 
 
 # Cleanup function
 @pytest.fixture(autouse=True)
-def cleanup_test_data(test_db_session):
-    """Clean up test data after each test"""
+def cleanup_test_data():
+    """No-op: per-test DB ensures isolation automatically."""
     yield
-    # The transaction rollback handles cleanup automatically

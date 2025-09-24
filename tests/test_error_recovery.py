@@ -12,6 +12,9 @@ import uuid
 
 from core.config import Config
 
+# Import test database setup to enable patching
+from tests.test_database_setup import *
+
 
 class TestErrorRecovery:
     """Error recovery and rollback testing"""
@@ -32,10 +35,10 @@ class TestErrorRecovery:
     @pytest.fixture
     def mock_services_with_failures(self):
         """Mock services configured to simulate failures"""
-        with patch('grpc_clients.arkd_client.ArkClient') as mock_arkd, \
+        with patch('grpc_clients.arkd_client.ArkdClient') as mock_arkd, \
              patch('grpc_clients.lnd_client.LndClient') as mock_lnd, \
-             patch('grpc_clients.tapd_client.TapClient') as mock_tapd, \
-             patch('core.session_manager.SessionManager') as mock_session, \
+             patch('grpc_clients.tapd_client.TapdClient') as mock_tapd, \
+             patch('core.session_manager.SigningSessionManager') as mock_session, \
              patch('core.asset_manager.AssetManager') as mock_asset, \
              patch('core.transaction_processor.TransactionProcessor') as mock_tx_processor, \
              patch('core.signing_orchestrator.SigningOrchestrator') as mock_orchestrator, \

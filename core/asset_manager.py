@@ -67,6 +67,18 @@ class AssetManager:
         Returns:
             Asset creation result
         """
+        # Basic input validation
+        if not asset_id or not isinstance(asset_id, str):
+            raise AssetError("Invalid asset_id")
+        if not name or not isinstance(name, str):
+            raise AssetError("Invalid asset name")
+        if not ticker or not isinstance(ticker, str):
+            raise AssetError("Invalid ticker")
+        if decimal_places is not None and decimal_places < 0:
+            raise AssetError("Invalid decimal places")
+        if asset_type not in (AssetType.NORMAL.value, AssetType.COLLECTIBLE.value, 'normal', 'collectible'):
+            raise AssetError("Invalid asset_type")
+
         session = get_session()
         try:
             # Check if asset already exists
@@ -206,6 +218,12 @@ class AssetManager:
         Returns:
             Balance information
         """
+        # Input validation
+        if not user_pubkey or not isinstance(user_pubkey, str):
+            raise AssetError("Invalid user_pubkey")
+        if not asset_id or not isinstance(asset_id, str):
+            raise AssetError("Invalid asset_id")
+
         session = get_session()
         try:
             balance = session.query(AssetBalance).filter_by(
@@ -287,6 +305,9 @@ class AssetManager:
         Returns:
             Minting result
         """
+        if amount < 0:
+            raise AssetError("Invalid mint amount")
+
         session = get_session()
         try:
             # Validate asset exists and is active
@@ -295,7 +316,7 @@ class AssetManager:
                 raise AssetError(f"Asset {asset_id} not found or inactive")
 
             # Check supply limit
-            if asset.total_supply > 0:
+            if asset.total_supply > 0 and asset.asset_id != 'BTC':
                 current_supply = session.query(func.sum(AssetBalance.balance)).filter_by(asset_id=asset_id).scalar() or 0
                 if current_supply + amount > asset.total_supply:
                     raise AssetError(f"Minting would exceed total supply limit")
@@ -320,11 +341,11 @@ class AssetManager:
 
             session.commit()
 
-            logger.info(f"Minted {amount} {asset_id} to {user_pubkey[:8]}...")
+            logger.info(f"Minted {amount} {asset_id} to {user_pubkey[:10]}...")
 
             return {
                 'asset_id': asset_id,
-                'user_pubkey': user_pubkey[:8] + '...',
+                'user_pubkey': user_pubkey[:10] + '...',
                 'amount_minted': amount,
                 'reserve_amount': reserve_amount,
                 'new_balance': balance.balance,
@@ -352,6 +373,9 @@ class AssetManager:
         Returns:
             Transfer result
         """
+        if amount <= 0:
+            raise InsufficientAssetError("Transfer amount must be positive")
+
         session = get_session()
         try:
             # Validate asset exists
@@ -393,12 +417,12 @@ class AssetManager:
 
             session.commit()
 
-            logger.info(f"Transferred {amount} {asset_id} from {sender_pubkey[:8]} to {recipient_pubkey[:8]}")
+            logger.info(f"Transferred {amount} {asset_id} from {sender_pubkey[:10]} to {recipient_pubkey[:10]}")
 
             return {
                 'asset_id': asset_id,
-                'sender': sender_pubkey[:8] + '...',
-                'recipient': recipient_pubkey[:8] + '...',
+                'sender': sender_pubkey[:10] + '...',
+                'recipient': recipient_pubkey[:10] + '...',
                 'amount': amount,
                 'sender_balance': sender_balance.balance,
                 'recipient_balance': recipient_balance.balance,
@@ -462,7 +486,7 @@ class AssetManager:
         vtxos = query.order_by(Vtxo.created_at.desc()).all()
 
         result = {
-            'user_pubkey': user_pubkey[:8] + '...',
+            'user_pubkey': user_pubkey[:10] + '...',
             'vtxos': [],
             'total_available': 0,
             'total_assigned': 0
@@ -491,7 +515,7 @@ class AssetManager:
                     amount_sats: int, txid: str = None, vout: int = None) -> Dict[str, Any]:
         """Create a new VTXO"""
         # Generate VTXO ID
-        vtxo_id = self._generate_vtxo_id(user_pubkey, amount_sats)
+        vtxo_id = str(uuid.uuid4())
 
         # Calculate expiry
         expires_at = datetime.utcnow() + timedelta(hours=self.vtxo_expiry_hours)
@@ -513,7 +537,7 @@ class AssetManager:
         session.commit()
         session.refresh(vtxo)
 
-        logger.info(f"Created VTXO {vtxo_id} for {user_pubkey[:8]}...")
+        logger.info(f"Created VTXO {vtxo_id} for {user_pubkey[:10]}...")
 
         return {
             'vtxo_id': vtxo_id,
@@ -682,8 +706,9 @@ class AssetManager:
             session.close()
 
     def _generate_vtxo_id(self, user_pubkey: str, amount_sats: int) -> str:
-        """Generate a unique VTXO ID"""
-        data = f"{user_pubkey}{amount_sats}{datetime.utcnow().isoformat()}"
+        """Generate a unique VTXO ID as a 64-char sha256 hex string"""
+        nonce = uuid.uuid4().hex
+        data = f"{user_pubkey}{amount_sats}{datetime.utcnow().isoformat()}{nonce}"
         return hashlib.sha256(data.encode()).hexdigest()
 
     def _generate_script_pubkey(self, user_pubkey: str) -> bytes:
@@ -696,6 +721,11 @@ class AssetManager:
         """Calculate reserve requirements for an asset"""
         session = get_session()
         try:
+            # Validate asset exists
+            asset = session.query(Asset).filter_by(asset_id=asset_id).first()
+            if not asset:
+                return {'error': 'Asset not found'}
+
             # Get total circulation
             total_circulation = session.query(func.sum(AssetBalance.balance)).filter_by(asset_id=asset_id).scalar() or 0
             total_reserved = session.query(func.sum(AssetBalance.reserved_balance)).filter_by(asset_id=asset_id).scalar() or 0

@@ -2,6 +2,9 @@
 Pytest configuration and fixtures
 """
 
+# Load shared fixtures from test_database_setup across the test suite
+pytest_plugins = ["tests.test_database_setup"]
+
 import pytest
 import sys
 import os

@@ -10,6 +10,9 @@ from datetime import datetime, timedelta
 # Add the current directory to the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Import test database setup to enable patching
+from tests.test_database_setup import *
+
 from session_manager import get_session_manager, SessionState
 from challenge_manager import get_challenge_manager
 from transaction_processor import get_transaction_processor

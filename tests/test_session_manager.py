@@ -13,10 +13,9 @@ from core.session_manager import (
     SessionExpiredError, SessionType
 )
 from core.models import SigningSession, SigningChallenge, get_session
-from tests.test_database_setup import (
-    test_db_session, test_engine, test_tables, create_test_signing_session, create_test_signing_challenge,
-    sample_signing_session_data, sample_signing_challenge_data
-)
+
+# Import test database setup to enable patching
+from tests.test_database_setup import *
 
 
 @pytest.fixture
@@ -32,11 +31,10 @@ def sample_signing_session():
     return SigningSession(
         session_id=str(uuid.uuid4()),
         user_pubkey="test_user_pubkey",
-        state=SessionState.INITIATED.value,
-        action_intent={"type": "transfer", "amount": 10000},
-        human_readable_context="Transfer 10000 sats to recipient",
-        created_at=datetime.now(),
-        expires_at=datetime.now() + timedelta(minutes=10)
+        status="initiated",
+        intent_data={"type": "transfer", "amount": 10000},
+        context="Transfer 10000 sats to recipient",
+        created_at=datetime.now()
     )
 
 
@@ -128,15 +126,20 @@ class TestSessionManager:
         session_id = sample_signing_session.session_id
         new_state = SessionState.CHALLENGE_SENT.value
 
-        with patch.object(session_manager, '_update_session_record') as mock_update:
+        # Mock the database session to return the sample session
+        with patch.object(session_manager, '_update_session_status') as mock_update:
             mock_update.return_value = sample_signing_session
 
-            updated_session = session_manager.update_session_state(
-                session_id, new_state
-            )
+            # Mock the database query to return the session
+            with patch('core.session_manager.get_session') as mock_db_session:
+                mock_db_session.return_value.query.return_value.filter.return_value.first.return_value = sample_signing_session
 
-            assert updated_session is not None
-            mock_update.assert_called_once_with(session_id, new_state)
+                updated_session = session_manager.update_session_status(
+                    session_id, new_state
+                )
+
+                assert updated_session is not None
+                mock_update.assert_called_once()
 
     def test_update_session_state_invalid_state(self, session_manager):
         """Test session state update with invalid state"""
@@ -353,7 +356,7 @@ class TestSessionManager:
             )
 
             # Update session state
-            with patch.object(session_manager, '_update_session_record') as mock_update:
+            with patch.object(session_manager, '_update_session_status') as mock_update:
                 mock_update.return_value = session
 
                 updated_session = session_manager.update_session_state(

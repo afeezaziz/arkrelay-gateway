@@ -17,6 +17,9 @@ import os
 
 from tests.test_config import configure_test_environment
 
+# Import test database setup to enable patching
+from tests.test_database_setup import *
+
 
 class TestLoadTesting:
     """Load testing suite for Ark Relay Gateway"""
@@ -40,10 +43,10 @@ class TestLoadTesting:
     @pytest.fixture
     def mock_services(self):
         """Mock services for load testing"""
-        with patch('grpc_clients.arkd_client.ArkClient') as mock_arkd, \
+        with patch('grpc_clients.arkd_client.ArkdClient') as mock_arkd, \
              patch('grpc_clients.lnd_client.LndClient') as mock_lnd, \
              patch('grpc_clients.tapd_client.TapClient') as mock_tapd, \
-             patch('session_manager.SessionManager') as mock_session, \
+             patch('session_manager.SigningSessionManager') as mock_session, \
              patch('models.get_session') as mock_db:
 
             # Configure mock clients

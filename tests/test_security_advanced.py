@@ -93,10 +93,10 @@ class TestAdvancedSecurity:
     @pytest.fixture
     def mock_services(self):
         """Mock services for advanced security testing"""
-        with patch('grpc_clients.arkd_client.ArkClient') as mock_arkd, \
+        with patch('grpc_clients.arkd_client.ArkdClient') as mock_arkd, \
              patch('grpc_clients.lnd_client.LndClient') as mock_lnd, \
-             patch('grpc_clients.tapd_client.TapClient') as mock_tapd, \
-             patch('core.session_manager.SessionManager') as mock_session, \
+             patch('grpc_clients.tapd_client.TapdClient') as mock_tapd, \
+             patch('core.session_manager.SigningSessionManager') as mock_session, \
              patch('core.asset_manager.AssetManager') as mock_asset, \
              patch('core.transaction_processor.TransactionProcessor') as mock_tx_processor:
 
@@ -754,7 +754,16 @@ class TestAdvancedSecurity:
 
     def _simulate_login_attempt(self, username, password, mock_services):
         """Simulate login attempt"""
-        return {'success': False, 'locked_out': False}
+        # Simulate failed login that locks out after max attempts
+        if hasattr(self, '_failed_attempts'):
+            self._failed_attempts += 1
+        else:
+            self._failed_attempts = 1
+
+        max_attempts = 5  # Default max attempts
+        locked_out = self._failed_attempts > max_attempts
+
+        return {'success': False, 'locked_out': locked_out}
 
     def _validate_security_header(self, header_name, expected_value):
         """Validate security header"""

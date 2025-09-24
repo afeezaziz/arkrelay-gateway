@@ -12,6 +12,9 @@ from datetime import datetime, timedelta
 
 from tests.test_config import configure_test_environment
 
+# Import test database setup to enable patching
+from tests.test_database_setup import *
+
 
 class TestNigiriIntegration:
     """Integration tests for Nigiri Bitcoin environment"""
@@ -31,7 +34,7 @@ class TestNigiriIntegration:
     @pytest.fixture
     def mock_bitcoind_client(self):
         """Mock Bitcoin client for testing"""
-        with patch('grpc_clients.arkd_client.ArkClient') as mock:
+        with patch('grpc_clients.arkd_client.ArkdClient') as mock:
             client = Mock()
             client.health_check.return_value = True
             client.get_blockchain_info.return_value = {
@@ -62,7 +65,7 @@ class TestNigiriIntegration:
     @pytest.fixture
     def mock_tapd_client(self):
         """Mock TAPD client for testing"""
-        with patch('grpc_clients.tapd_client.TapClient') as mock:
+        with patch('grpc_clients.tapd_client.TapdClient') as mock:
             client = Mock()
             client.health_check.return_value = True
             client.list_assets.return_value = [
@@ -79,7 +82,7 @@ class TestNigiriIntegration:
     @pytest.fixture
     def mock_arkd_client(self):
         """Mock ARKD client for testing"""
-        with patch('grpc_clients.arkd_client.ArkClient') as mock:
+        with patch('grpc_clients.arkd_client.ArkdClient') as mock:
             client = Mock()
             client.health_check.return_value = True
             client.get_round_info.return_value = {
@@ -313,7 +316,7 @@ class TestNigiriIntegration:
     def test_error_handling_integration(self, nigiri_environment):
         """Test error handling in integration scenarios"""
         # Test daemon disconnection handling
-        with patch('grpc_clients.arkd_client.ArkClient') as mock:
+        with patch('grpc_clients.arkd_client.ArkdClient') as mock:
             client = Mock()
             client.health_check.side_effect = Exception("Connection failed")
             mock.return_value = client
@@ -369,7 +372,7 @@ class TestNigiriIntegration:
         import time
 
         def daemon_health_check():
-            with patch('grpc_clients.arkd_client.ArkClient') as mock:
+            with patch('grpc_clients.arkd_client.ArkdClient') as mock:
                 client = Mock()
                 client.health_check.return_value = True
                 mock.return_value = client
@@ -405,7 +408,7 @@ class TestNigiriIntegration:
         initial_memory = process.memory_info().rss
 
         # Simulate resource-intensive operations
-        with patch('grpc_clients.arkd_client.ArkClient') as mock:
+        with patch('grpc_clients.arkd_client.ArkdClient') as mock:
             client = Mock()
             client.health_check.return_value = True
             client.list_vtxos.return_value = [{'tx_id': f'test_tx_{i}', 'amount': 100000} for i in range(1000)]
@@ -425,7 +428,7 @@ class TestNigiriIntegration:
     def test_network_resilience(self, nigiri_environment):
         """Test network resilience in integration"""
         # Test network timeout handling
-        with patch('grpc_clients.arkd_client.ArkClient') as mock:
+        with patch('grpc_clients.arkd_client.ArkdClient') as mock:
             client = Mock()
             client.health_check.side_effect = [
                 Exception("Network timeout"),
@@ -479,7 +482,7 @@ class TestNigiriIntegration:
     def test_scaling_behavior(self, nigiri_environment):
         """Test scaling behavior with increasing load"""
         # Mock scaling behavior
-        with patch('grpc_clients.arkd_client.ArkClient') as mock:
+        with patch('grpc_clients.arkd_client.ArkdClient') as mock:
             client = Mock()
 
             def list_vtxos_with_scaling(count):

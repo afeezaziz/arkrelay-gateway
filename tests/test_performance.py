@@ -15,6 +15,9 @@ from datetime import datetime, timedelta
 
 from core.config import Config
 
+# Import test database setup to enable patching
+from tests.test_database_setup import *
+
 
 class TestPerformance:
     """Performance test suite for Ark Relay Gateway"""
@@ -35,10 +38,10 @@ class TestPerformance:
     @pytest.fixture
     def mock_services(self):
         """Mock services for performance testing"""
-        with patch('grpc_clients.arkd_client.ArkClient') as mock_arkd, \
+        with patch('grpc_clients.arkd_client.ArkdClient') as mock_arkd, \
              patch('grpc_clients.lnd_client.LndClient') as mock_lnd, \
              patch('grpc_clients.tapd_client.TapClient') as mock_tapd, \
-             patch('core.session_manager.SessionManager') as mock_session:
+             patch('core.session_manager.SigningSessionManager') as mock_session:
 
             # Configure mock clients for fast responses
             arkd_client = Mock()

@@ -6,7 +6,7 @@ integrating with the LND client and database models.
 """
 
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Generator
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 
@@ -16,6 +16,15 @@ from grpc_clients.lnd_client import LndClient, LightningInvoice as LndLightningI
 from core.lightning_errors import lightning_error_handler, lightning_payment_recovery, lightning_invoice_recovery, LightningError, LightningErrorType
 
 logger = logging.getLogger(__name__)
+
+
+def get_db() -> Generator[Session, None, None]:
+    """Yield a database session (generator style) for easy patching in tests."""
+    db = get_session()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 @dataclass

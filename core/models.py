@@ -111,6 +111,17 @@ class SigningSession(Base):
     result_data = Column(JSON, nullable=True)  # Final transaction details
     error_message = Column(Text, nullable=True)
 
+    # Compatibility: accept alias kwargs often used in tests
+    def __init__(self, **kwargs):
+        # Map compatibility aliases to actual column names
+        if 'state' in kwargs and 'status' not in kwargs:
+            kwargs['status'] = kwargs.pop('state')
+        if 'action_intent' in kwargs and 'intent_data' not in kwargs:
+            kwargs['intent_data'] = kwargs.pop('action_intent')
+        if 'human_readable_context' in kwargs and 'context' not in kwargs:
+            kwargs['context'] = kwargs.pop('human_readable_context')
+        super().__init__(**kwargs)
+
 class SigningChallenge(Base):
     __tablename__ = 'signing_challenges'
 
@@ -125,6 +136,12 @@ class SigningChallenge(Base):
     signature = Column(LargeBinary, nullable=True)  # User's signature response
 
     session = relationship("SigningSession", foreign_keys=[session_id])
+
+    # Compatibility: accept alias kwargs often used in tests
+    def __init__(self, **kwargs):
+        if 'human_readable_context' in kwargs and 'context' not in kwargs:
+            kwargs['context'] = kwargs.pop('human_readable_context')
+        super().__init__(**kwargs)
 
 class Transaction(Base):
     __tablename__ = 'transactions'

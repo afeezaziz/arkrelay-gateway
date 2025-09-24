@@ -14,6 +14,9 @@ import string
 
 from core.config import Config
 
+# Import test database setup to enable patching
+from tests.test_database_setup import *
+
 
 class TestSecurityTesting:
     """Security testing suite for Ark Relay Gateway"""
@@ -35,10 +38,10 @@ class TestSecurityTesting:
     @pytest.fixture
     def mock_services(self):
         """Mock services for security testing"""
-        with patch('grpc_clients.arkd_client.ArkClient') as mock_arkd, \
+        with patch('grpc_clients.arkd_client.ArkdClient') as mock_arkd, \
              patch('grpc_clients.lnd_client.LndClient') as mock_lnd, \
-             patch('grpc_clients.tapd_client.TapClient') as mock_tapd, \
-             patch('core.session_manager.SessionManager') as mock_session, \
+             patch('grpc_clients.tapd_client.TapdClient') as mock_tapd, \
+             patch('core.session_manager.SigningSessionManager') as mock_session, \
              patch('core.models.get_session') as mock_db, \
              patch('nostr_clients.nostr_client.NostrClient') as mock_nostr:
 

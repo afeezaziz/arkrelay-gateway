@@ -33,10 +33,10 @@ class TestEndToEndTransactions:
     @pytest.fixture
     def complete_mock_services(self):
         """Complete mock services for end-to-end testing"""
-        with patch('grpc_clients.arkd_client.ArkClient') as mock_arkd, \
+        with patch('grpc_clients.arkd_client.ArkdClient') as mock_arkd, \
              patch('grpc_clients.lnd_client.LndClient') as mock_lnd, \
-             patch('grpc_clients.tapd_client.TapClient') as mock_tapd, \
-             patch('session_manager.SessionManager') as mock_session, \
+             patch('grpc_clients.tapd_client.TapdClient') as mock_tapd, \
+             patch('session_manager.SigningSessionManager') as mock_session, \
              patch('models.get_session') as mock_db, \
              patch('nostr_clients.nostr_client.NostrClient') as mock_nostr, \
              patch('redis.Redis') as mock_redis:
@@ -59,6 +59,18 @@ class TestEndToEndTransactions:
                     'is_spent': False
                 }
             ]
+            arkd_client.create_vtxos.return_value = {
+                'tx_id': 'test_vtxo_tx',
+                'vtxos': [
+                    {
+                        'tx_id': 'test_vtxo_tx',
+                        'vout': 0,
+                        'amount': 10000,
+                        'asset_id': 'gbtc',
+                        'is_spent': False
+                    }
+                ]
+            }
 
             # LND Client
             lnd_client = Mock()
