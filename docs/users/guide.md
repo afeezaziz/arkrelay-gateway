@@ -148,10 +148,10 @@ This gateway is intentionally thin. It should not host DeFi protocol endpoints o
   - VTXO/settlement: `POST /vtxos/batch/create`, `POST /vtxos/assign`, `POST /vtxos/mark-spent`, `POST /vtxos/settlement/process`, `GET /vtxos/settlement/status`
   - Optional rails: `POST /lightning/lift`, `POST /lightning/land`, `POST /lightning/pay/<payment_hash>`
 
-All DeFi-specific APIs (e.g., `lend/*`, `amm/*`) and data models (markets, positions, pools) must live in the solver service. See `DEFIGUIDE.md` and `SOLVERINTEGRATION.md`.
+All DeFi-specific APIs (e.g., `lend/*`, `amm/*`) and data models (markets, positions, pools) must live in the solver service. See `../developers/defi-guide.md` and `../developers/solver-integration.md`.
 
 ### Health and Status
-- `GET /` — Welcome/info
+- `GET /` — Gateway information
 - `GET /health` — Basic health
 - `GET /ready` — Readiness
 - `GET /queue-status` — Queue stats (RQ)
@@ -214,6 +214,7 @@ Note: These are development/ops helpers for low-level transaction control and de
 - `GET /transactions/<txid>/status` — Get status
 - `POST /transactions/<txid>/broadcast` — Broadcast
 - `GET /transactions/user/<user_pubkey>` — User transactions
+- `POST /transactions/user/confirm/<txid>` — Confirm transaction
 
 ### Asset Management (core/asset_manager.py)
 Note: Dev/ops helpers for simple balances/transfers and VTXO utilities. Do not build DeFi protocol surfaces here; implement them in a separate solver service.

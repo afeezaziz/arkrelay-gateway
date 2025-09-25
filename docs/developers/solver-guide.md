@@ -6,9 +6,9 @@ This guide teaches you how to build a production-grade DeFi "solver" service tha
 - Your solver implements protocol logic (rates, AMM math, positions, risk, keepers) and uses the gateway for signing and settlement.
 
 See also:
-- `SOLVERINTEGRATION.md` — minimal solver↔gateway contract and sequence diagrams.
-- `DEFIGUIDE.md` — how to model Aave-like lending and Uniswap-like AMM using a solver-driven architecture.
-- `NOSTRGUIDE.md` — event kinds and Nostr DM/security requirements.
+- `docs/developers/solver-integration.md` — minimal solver↔gateway contract and sequence diagrams.
+- `docs/developers/defi-guide.md` — how to model Aave-like lending and Uniswap-like AMM using a solver-driven architecture.
+- `docs/developers/nostr-guide.md` — event kinds and Nostr DM/security requirements.
 
 ---
 
@@ -61,6 +61,53 @@ flowchart LR
   IN <--> RLY[(Relays)]
   GW --> GAPI[Gateway HTTP]
   GAPI --> GDM[Nostr DMs]
+```
+
+---
+
+## SDK Helpers
+
+Use the SDKs in this repo to cut boilerplate for common tasks (issuing challenges, ceremony polling, NIP-01 verification, and payload building).
+
+- Python SDK (`sdk/`)
+  - `sdk.GatewayClient`: minimal HTTP wrapper for sessions, challenges, ceremony, VTXO, and assets.
+  - `sdk.solver_flows`: high-level flows, e.g., `accept_intent_and_issue_challenge`, `start_and_wait_ceremony`.
+  - `sdk.ceremony`: polling helper `wait_for_ceremony` with success/failure states.
+  - `sdk.payloads`: builders and validators for 31510/31511/31512; canonical JSON + sha256 utilities.
+  - `sdk.wallet_utils`: BIP340 signing helpers (message/data/event) for wallets.
+  - `sdk.nostr_utils`: NIP-01 `verify_event`, `compute_event_id`, and npub conversions.
+  - `sdk.retry` / `sdk.errors` / `sdk.types`: retries with backoff, common errors, and TypedDict models.
+
+Python examples:
+
+```python
+from sdk import GatewayClient
+from sdk.solver_flows import accept_intent_and_issue_challenge, start_and_wait_ceremony
+
+client = GatewayClient("http://localhost:8000")
+intent = {"action_id":"uuid...","type":"amm:swap","params":{...},"expires_at":1735689600}
+out = accept_intent_and_issue_challenge(client, user_pubkey="npub1...", intent=intent)
+ok, status = start_and_wait_ceremony(client, out["session_id"], timeout=120)
+```
+
+```python
+from sdk import verify_event
+ok, info = verify_event(event)
+```
+
+- TypeScript SDK (`sdk-ts/`)
+  - `GatewayClient`: minimal HTTP client for sessions, challenges, ceremony, and assets.
+  - `nostrUtils`: `computeEventId`, `verifyEvent`, `hexToNpub`/`npubToHex` (uses `@noble/secp256k1` + `bech32`).
+
+TypeScript example:
+
+```ts
+import { GatewayClient } from "../sdk-ts/src";
+import { verifyEvent } from "../sdk-ts/src";
+
+const client = new GatewayClient("http://localhost:8000");
+const status = await client.getCeremonyStatus("sess_...");
+const ok = await verifyEvent(event);
 ```
 
 ---
@@ -176,7 +223,7 @@ The wallet returns the signature required to proceed.
 
 ## End-to-End (concise)
 
-See `SOLVERINTEGRATION.md` for detailed sequence diagrams and minimal gateway HTTP endpoints.
+See `docs/developers/solver-integration.md` for detailed sequence diagrams and minimal gateway HTTP endpoints.
 
 - **Borrow**
   - Client publishes 31510; solver checks HF/rates; solver requests challenge via sessions API.
@@ -226,4 +273,4 @@ status = requests.get(f"{GATEWAY}/signing/ceremony/{session_id}/status").json()
 requests.post(f"{GATEWAY}/vtxos/settlement/process")
 ```
 
-For the canonical contract and diagrams, see `SOLVERINTEGRATION.md`.
+For the canonical contract and diagrams, see `docs/developers/solver-integration.md`.

@@ -239,7 +239,7 @@ Key endpoints:
 - `GET  /signing/ceremony/{session_id}/status` — ceremony status
 - `GET  /nostr/status` — nostr connectivity info
 
-See `USERGUIDE.md` and the OpenAPI spec for full details.
+See `docs/users/guide.md` and the OpenAPI spec for full details.
 
 ---
 

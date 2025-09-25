@@ -27,3 +27,8 @@ dependencies = [
     "pytest-cov>=5.0.0",
     "prometheus-client>=0.23.1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/afeezaziz/arkrelay-gateway/tree/main/gateway"
+Repository = "https://github.com/afeezaziz/arkrelay-gateway"
+Issues = "https://github.com/afeezaziz/arkrelay-gateway/issues"

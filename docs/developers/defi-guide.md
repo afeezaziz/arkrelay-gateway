@@ -6,8 +6,8 @@ This guide shows how to build DeFi protocols on top of ArkRelay’s financial pr
 - Uniswap-like AMM with liquidity pools and swaps
 
 Use this together with:
-- `USERGUIDE.md` for HTTP endpoints and module references
-- `NOSTRGUIDE.md` for the Nostr intent + challenge/response flow
+- `docs/users/guide.md` for HTTP endpoints and module references
+- `docs/developers/nostr-guide.md` for the Nostr intent + challenge/response flow
 
 ---
 
@@ -16,7 +16,7 @@ Use this together with:
 - **Assets & Balances** (`core/models.py`, `core/asset_manager.py`)
   - `Asset` is a fungible token entry (e.g., BTC, gBTC, LP-FOO-BAR).
   - `AssetBalance` tracks a user’s asset balance and reserved amounts.
-  - HTTP endpoints under “Asset Management” in `USERGUIDE.md` cover CRUD, minting, transfers, stats.
+  - HTTP endpoints under “Asset Management” in `docs/users/guide.md` cover CRUD, minting, transfers, stats.
 
 - **VTXO Lifecycle** (`core/vtxo_manager.py`)
   - Inventory, assignment, expiration, and L1 settlement of virtual UTXOs.
@@ -227,9 +227,9 @@ Back these with solver-side jobs for pool ops. Use the gateway only for signing/
 3. Client verifies context and responds with 31512 signed payload(s).
 4. Solver executes business logic (quotes, balances, reserves, positions) and, when ready, asks the gateway to finalize VTXOs/transactions after collecting signatures.
 5. On success, the gateway finalizes and emits a 31340 confirmation event; the solver updates its own state and returns API status.
-6. On errors, gateway sends 31341 DM with actionable error codes (see `NOSTRGUIDE.md`).
+6. On errors, gateway sends 31341 DM with actionable error codes (see `docs/developers/nostr-guide.md`).
 
-Use `/signing/ceremony/*` endpoints from `USERGUIDE.md` during development to step through and debug ceremony stages.
+Use `/signing/ceremony/*` endpoints from `docs/users/guide.md` during development to step through and debug ceremony stages.
 
 ---
 
@@ -253,7 +253,7 @@ Use `/signing/ceremony/*` endpoints from `USERGUIDE.md` during development to st
 - Confirmation (31340): public success event. Tags original intent and participants.
 - Failure (31341): encrypted DM with failure details and code.
 
-See `NOSTRGUIDE.md` for detailed examples and the security checklist.
+See `docs/developers/nostr-guide.md` for detailed examples and the security checklist.
 
 ---
 
@@ -286,7 +286,5 @@ See `NOSTRGUIDE.md` for detailed examples and the security checklist.
   1) Client publishes 31510 `{ "type": "lend:borrow", ... }`.
   2) Solver accrues interest, checks HF, then orchestrates signatures via gateway challenges if needed.
   3) Solver updates positions and transfers via gateway-settled VTXOs; gateway emits 31340 upon finalization.
-
----
 
 If you’d like scaffold code for `defi_bp` (HTTP) and an example Nostr router for `31510` types, let us know and we’ll add them as templates to `core/`.

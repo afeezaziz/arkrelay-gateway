@@ -1,0 +1,38 @@
+{
+  "name": "arkrelay-sdk-ts",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for ArkRelay Gateway (sessions, ceremony, assets, and Nostr utilities)",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "version:bump:patch": "node -e \"const fs=require('fs');const pkg=JSON.parse(fs.readFileSync('package.json'));const [a,b,c]=pkg.version.split('.').map(Number);pkg.version=[a,b,c+1].join('.');fs.writeFileSync('package.json',JSON.stringify(pkg,null,2)+'\n');console.log('New version',pkg.version);\""
+  },
+  "dependencies": {
+    "@noble/secp256k1": "2.1.0",
+    "@noble/hashes": "1.4.0",
+    "bech32": "2.0.0",
+    "ajv": "8.12.0"
+  },
+  "devDependencies": {
+    "typescript": "5.6.3"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/afeezaziz/arkrelay-gateway"
+  },
+  "homepage": "https://github.com/afeezaziz/arkrelay-gateway/tree/main/gateway/sdk-ts",
+  "bugs": {
+    "url": "https://github.com/afeezaziz/arkrelay-gateway/issues"
+  },
+  "keywords": ["arkrelay", "nostr", "sdk", "defi", "gateway"],
+  "license": "MIT"
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arkrelay.dev/schemas/31512_response.schema.json",
+  "title": "Nostr 31512 Response (DM)",
+  "type": "object",
+  "required": ["session_id", "type", "signature"],
+  "properties": {
+    "session_id": {"type": "string"},
+    "type": {"type": "string", "enum": ["sign_tx", "sign_payload"]},
+    "signature": {"type": "string"},
+    "payload_ref": {"type": "string"},
+    "algo": {"type": "string", "enum": ["BIP340", "ECDSA", "OTHER"]},
+    "pubkey": {"type": "string"}
+  },
+  "additionalProperties": false
+}

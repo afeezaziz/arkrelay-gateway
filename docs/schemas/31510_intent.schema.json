@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arkrelay.dev/schemas/31510_intent.schema.json",
+  "title": "Nostr 31510 Intent",
+  "type": "object",
+  "required": ["action_id", "type", "params", "expires_at"],
+  "properties": {
+    "action_id": {"type": "string", "description": "Idempotency key (UUID v4 recommended)"},
+    "type": {"type": "string", "pattern": "^[a-z]+:[a-z_]+$", "description": "Namespaced action type, e.g., amm:swap, lend:borrow"},
+    "params": {"type": "object", "additionalProperties": true},
+    "expires_at": {"type": "integer", "minimum": 0, "description": "Unix seconds"},
+    "protocol_version": {"type": "string"},
+    "network": {"type": "string", "enum": ["regtest", "testnet", "mainnet"]},
+    "solver_id": {"type": "string"},
+    "deadline": {"type": "integer", "minimum": 0},
+    "min_out_amount": {"type": "integer", "minimum": 0},
+    "recipient_pubkey": {"type": "string"}
+  },
+  "additionalProperties": false
+}

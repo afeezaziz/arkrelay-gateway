@@ -14,23 +14,43 @@ A Flask-based gateway service for managing background tasks, scheduling, and sys
 - **Circuit Breaker**: Fault tolerance and graceful degradation for gRPC services
 - **Service Health Monitoring**: Real-time health checks for all backend daemons
 
+## Documentation
+
+- Docs index: `docs/README.md`
+- PRD: `docs/progress/prd.md`
+- Roadmap: `docs/progress/roadmap.md`
+- Releasing guide: `RELEASING.md`
+
 ## Architecture
 
 - **Web Service**: Flask application (`app.py`) - Port 8000
 - **Worker Service**: RQ worker for processing background tasks
-- **Scheduler Service**: Periodic task scheduler (`scheduler.py`)
 - **Database**: MariaDB for persistent storage
 - **Queue**: Redis for job queuing and scheduling
 
 ## For Solver Builders
 
-If you're building a DeFi solver service (Aave-like lending, Uniswap-like AMM) that uses this gateway for signing and settlement, start here:
-
-- Solver Guide: see `SOLVER.md`
-- Solver Integration Contract (events + minimal HTTP): see `SOLVERINTEGRATION.md`
-- DeFi Developers Guide (designing protocols on the primitives): see `DEFIGUIDE.md`
+  If you're building a DeFi solver service (Aave-like lending, Uniswap-like AMM) that uses this gateway for signing and settlement, start here:
+  
+  - Solver Guide: `docs/developers/solver-guide.md`
+  - Solver Integration Contract (events + minimal HTTP): `docs/developers/solver-integration.md`
+  - DeFi Developers Guide (designing protocols on the primitives): `docs/developers/defi-guide.md`
 
 An example skeleton is available under `examples/solver/` to help you bootstrap a solver that subscribes to 31510 intents, requests signing challenges, and finalizes via gateway endpoints.
+
+## SDKs
+
+Use these SDKs to integrate with the Gateway quickly:
+
+- Python SDK: `sdk/`
+  - Local install: `cd sdk && pip install -e .`
+  - Docs: see `sdk/README.md`
+  - Provides: `GatewayClient` (with optional retry), `solver_flows`, `ceremony`, `payloads`, `wallet_utils` (BIP340 signing), `nostr_utils` (NIP-01 verify), `types`, `errors`, `retry`.
+
+- TypeScript SDK: `sdk-ts/`
+  - Build: `cd sdk-ts && npm install && npm run build`
+  - Docs: see `sdk-ts/README.md`
+  - Provides: `GatewayClient` (with optional retry), `nostrUtils` (computeEventId/verifyEvent/npub<->hex), `validation` (AJV schemas), and a React ceremony polling hook example under `sdk-ts/examples/react-app`.
 
 ## Installation
 

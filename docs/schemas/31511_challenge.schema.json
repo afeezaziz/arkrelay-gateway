@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arkrelay.dev/schemas/31511_challenge.schema.json",
+  "title": "Nostr 31511 Challenge (DM)",
+  "type": "object",
+  "required": ["session_id", "type", "payload_to_sign"],
+  "properties": {
+    "session_id": {"type": "string"},
+    "type": {"type": "string", "enum": ["sign_tx", "sign_payload"]},
+    "payload_to_sign": {"type": "string", "description": "Canonical bytes/hex for signature"},
+    "payload_ref": {"type": "string", "description": "Digest of logical payload (e.g., sha256:...)"},
+    "algo": {"type": "string", "enum": ["BIP340", "ECDSA", "OTHER"]},
+    "domain": {"type": "string", "description": "Signing domain, e.g., arkrelay/amm/v1"},
+    "context": {"type": "object", "additionalProperties": true},
+    "step_index": {"type": "integer", "minimum": 1},
+    "step_total": {"type": "integer", "minimum": 1},
+    "expires_at": {"type": "integer", "minimum": 0}
+  },
+  "additionalProperties": false
+}
