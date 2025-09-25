@@ -1,5 +1,14 @@
 # ArkRelay Python SDK (arkrelay-sdk)
 
+> DEPRECATION NOTICE
+>
+> This folder (`gateway/sdk/`) is deprecated and frozen. The Python SDK has moved to `gateway/sdk-py/`.
+> New development, packaging, and releases now use `sdk-py/`.
+>
+> Use:
+> - Local install: `cd sdk-py && pip install -e .`
+> - Docs: `sdk-py/README.md`
+
 Python SDK for interacting with ArkRelay Gateway: sessions/challenges, ceremony polling, assets helpers, and Nostr (BIP340) utilities.
 
 ## Install (local)

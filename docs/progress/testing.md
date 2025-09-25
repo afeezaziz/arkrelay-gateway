@@ -214,7 +214,5 @@ Acceptance criteria:
 - When adding features:
   - Add unit tests and update this document if new markers or lanes are introduced
   - Consider coverage impact; add tests as needed
-
 ---
-
-Questions or proposals for improving this plan? Open a PR updating `TESTING.md` and reference specific files (e.g., `pytest.ini`, `tests/conftest.py`, `tests/test_database_setup.py`).
+Questions or proposals for improving this plan? Open a PR updating `docs/progress/testing.md` and reference specific files (e.g., `pytest.ini`, `tests/conftest.py`, `tests/test_database_setup.py`).
