@@ -21,5 +21,10 @@ Organized documentation for users, developers, operators, and project progress.
 
 Additional references
 - OpenAPI spec: openapi.yaml
+- Configuration: docs/configuration.md
 - Releasing guide: RELEASING.md
-- SDKs: sdk/ (Python), sdk-ts/ (TypeScript)
+- SDKs: sdk-py/ (Python), sdk-ts/ (TypeScript)
+
+Install from package registries:
+- Python: `pip install arkrelay-sdk`
+- TypeScript: `npm i arkrelay-sdk-ts`

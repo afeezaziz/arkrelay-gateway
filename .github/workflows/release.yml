@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: gateway/sdk
+        working-directory: gateway/sdk-py
     steps:
       - name: Checkout
         uses: actions/checkout@v4

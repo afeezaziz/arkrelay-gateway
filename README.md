@@ -10,16 +10,44 @@ A Flask-based gateway service for managing background tasks, scheduling, and sys
 - **Database Integration**: MariaDB with SQLAlchemy ORM for persistent storage
 - **System Monitoring**: Real-time system metrics and heartbeat monitoring
 - **Job Tracking**: Comprehensive logging and status tracking for all tasks
-- **gRPC Client Layer**: Unified interface for ARKD, TAPD, and LND daemon communication
 - **Circuit Breaker**: Fault tolerance and graceful degradation for gRPC services
 - **Service Health Monitoring**: Real-time health checks for all backend daemons
 
 ## Documentation
 
-- Docs index: `docs/README.md`
-- PRD: `docs/progress/prd.md`
-- Roadmap: `docs/progress/roadmap.md`
-- Releasing guide: `RELEASING.md`
+ - Docs index: `docs/README.md`
+  - PRD: `docs/progress/prd.md`
+  - roadmap: `docs/progress/roadmap.md`
+  - Releasing guide: `RELEASING.md`
+
+## Quick Start (Developers)
+
+1) Install dependencies
+```bash
+uv sync  # or: pip install -r requirements.txt
+```
+
+2) Initialize the database (choose one)
+```bash
+alembic upgrade head
+# or
+python -c "from core.models import create_tables; create_tables()"
+```
+
+3) Run the API
+```bash
+python app.py  # or: gunicorn app:app -b 0.0.0.0:8000
+```
+
+4) Smoke test
+```bash
+curl -s http://localhost:8000/health
+```
+
+Next steps
+- See `docs/users/guide.md` for API workflows and examples
+- See `docs/developers/solver-guide.md` and `docs/developers/solver-integration.md` for solver integration patterns
+- See `docs/developers/nostr-guide.md` for 31510/31511/31512 authorization flows
 
 ## Architecture
 
@@ -36,15 +64,14 @@ A Flask-based gateway service for managing background tasks, scheduling, and sys
   - Solver Integration Contract (events + minimal HTTP): `docs/developers/solver-integration.md`
   - DeFi Developers Guide (designing protocols on the primitives): `docs/developers/defi-guide.md`
 
-An example skeleton is available under `examples/solver/` to help you bootstrap a solver that subscribes to 31510 intents, requests signing challenges, and finalizes via gateway endpoints.
 
 ## SDKs
 
 Use these SDKs to integrate with the Gateway quickly:
 
-- Python SDK: `sdk/`
-  - Local install: `cd sdk && pip install -e .`
-  - Docs: see `sdk/README.md`
+ - Python SDK: `sdk-py/`
+  - Local install: `cd sdk-py && pip install -e .`
+  - Docs: see `sdk-py/README.md`
   - Provides: `GatewayClient` (with optional retry), `solver_flows`, `ceremony`, `payloads`, `wallet_utils` (BIP340 signing), `nostr_utils` (NIP-01 verify), `types`, `errors`, `retry`.
 
 - TypeScript SDK: `sdk-ts/`
@@ -91,7 +118,7 @@ Use these SDKs to integrate with the Gateway quickly:
    alembic upgrade head
 
    # Or create tables directly
-   python -c "from models import create_tables; create_tables()"
+   python -c "from core.models import create_tables; create_tables()"
    ```
 
 ## Usage
@@ -109,7 +136,7 @@ Use these SDKs to integrate with the Gateway quickly:
 
 2. **Scheduler Service**:
    ```bash
-   python scheduler.py
+   python -m core.scheduler
    ```
 
 3. **Worker Service**:
@@ -226,7 +253,7 @@ services:
 
   scheduler:
     build: .
-    command: python scheduler.py
+    command: python -m core.scheduler
     environment:
       - DATABASE_URL=mysql+pymysql://user:password@mariadb:3306/arkrelay
       - REDIS_URL=redis://redis:6379/0
@@ -243,23 +270,22 @@ services:
 
 ### Running Tests
 ```bash
-# Run all tests
-uv run pytest
+# Run the default stable subset (see pytest.ini for filters)
+uv run pytest -q
 
 # Run unit tests only
-uv run pytest -m unit
+uv run pytest -q -m unit
 
 # Run with coverage
-uv run pytest --cov=.
+uv run pytest --cov=. -q
 
-# Run specific test file
-uv run pytest test_tasks.py
+# Run a specific test file
+uv run pytest -q tests/test_tasks.py
 ```
 
-**Current Test Status:**
-- **Unit Tests**: 41/67 passing (61.2% success rate)
-- **Total Test Suite**: 1,093 comprehensive tests
-- **Coverage Areas**: Flask app, Core config, Lightning integration, Session management, and more
+Notes:
+- Pytest defaults to a stable subset configured in `pytest.ini` (markers and a `-k` filter).
+- CI runs these checks on pull requests and main pushes.
 
 ### Code Quality
 ```bash

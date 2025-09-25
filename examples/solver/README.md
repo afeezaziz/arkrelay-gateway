@@ -100,7 +100,7 @@ Example response:
 
 ## Notes
 
-- This example imports the SDK helper from `sdk/gateway_client.py` in the repository root.
+- This example imports the SDK helper from `sdk-py/sdk/gateway_client.py` in the repository root (via `sys.path` adjustment).
 - Demo signing uses ECDSA secp256k1 with SHA-256 and is not a Nostr BIP340 Schnorr signature.
 - Provide a stable key via `SOLVER_ECDSA_PRIVKEY_HEX=<64-hex>` or an ephemeral key is generated on startup.
 - The example does not implement real Nostr subscription or finalization logic—see `docs/developers/solver-integration.md` for the full event flow and contract.

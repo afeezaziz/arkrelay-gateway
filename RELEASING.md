@@ -2,7 +2,7 @@
 
 This repository ships two SDKs under `gateway/` with tag-driven release automation:
 
-- Python SDK: `sdk/` → PyPI
+- Python SDK: `sdk-py/` → PyPI
 - TypeScript SDK: `sdk-ts/` → npm
 
 ## Prerequisites
@@ -20,11 +20,11 @@ This repository ships two SDKs under `gateway/` with tag-driven release automati
 
 ### Python SDK
 
-1) Bump version in `sdk/pyproject.toml` (or run helper):
+1) Bump version in `sdk-py/pyproject.toml` (or run helper):
 
 ```bash
 activate your venv
-cd gateway/sdk
+cd gateway/sdk-py
 python bump_version.py 0.1.1
 # commit and tag
 git add pyproject.toml
@@ -60,7 +60,7 @@ The workflow `.github/workflows/release.yml` will build and publish to npm.
 ## Changelogs
 
 - Root changes: `CHANGELOG.md`
-- Python SDK changes: `sdk/CHANGELOG.md`
+- Python SDK changes: `sdk-py/CHANGELOG.md`
 - TypeScript SDK changes: `sdk-ts/CHANGELOG.md`
 
 Keep changelogs up-to-date when bumping versions.

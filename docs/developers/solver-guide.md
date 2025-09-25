@@ -69,7 +69,7 @@ flowchart LR
 
 Use the SDKs in this repo to cut boilerplate for common tasks (issuing challenges, ceremony polling, NIP-01 verification, and payload building).
 
-- Python SDK (`sdk/`)
+- Python SDK (`sdk-py/`)
   - `sdk.GatewayClient`: minimal HTTP wrapper for sessions, challenges, ceremony, VTXO, and assets.
   - `sdk.solver_flows`: high-level flows, e.g., `accept_intent_and_issue_challenge`, `start_and_wait_ceremony`.
   - `sdk.ceremony`: polling helper `wait_for_ceremony` with success/failure states.
@@ -102,8 +102,8 @@ ok, info = verify_event(event)
 TypeScript example:
 
 ```ts
-import { GatewayClient } from "../sdk-ts/src";
-import { verifyEvent } from "../sdk-ts/src";
+import { GatewayClient } from "arkrelay-sdk-ts";
+import { verifyEvent } from "arkrelay-sdk-ts";
 
 const client = new GatewayClient("http://localhost:8000");
 const status = await client.getCeremonyStatus("sess_...");
@@ -271,6 +271,42 @@ status = requests.get(f"{GATEWAY}/signing/ceremony/{session_id}/status").json()
 
 # 4) On success, request finalization (e.g., create/assign/spend VTXOs)
 requests.post(f"{GATEWAY}/vtxos/settlement/process")
-```
+---
 
-For the canonical contract and diagrams, see `docs/developers/solver-integration.md`.
+## Minimal curl walkthrough
+
+Set a gateway base URL and run a full signing ceremony lifecycle.
+
+```bash
+GATEWAY="http://localhost:8000"
+USER_NPUB="npub1..."
+
+# 1) Create session
+SESSION_ID=$(curl -s -X POST "$GATEWAY/sessions/create" \
+  -H "Content-Type: application/json" \
+  -d '{"user_pubkey":"'"$USER_NPUB"'","session_type":"protocol_op","intent_data":{"action_id":"demo-001","type":"amm:swap","params":{"pool_id":"LP-gBTC-gUSD","in_asset":"gBTC","in_amount":50000,"min_out_amount":9800000},"expires_at":1735689600}}' \
+  | jq -r .session_id)
+echo "SESSION_ID=$SESSION_ID"
+
+# 2) Create signing challenge
+curl -s -X POST "$GATEWAY/sessions/$SESSION_ID/challenge" \
+  -H "Content-Type: application/json" \
+  -d '{"challenge_data":{"payload_to_sign":"0xdeadbeef"},"context":{"human":"Authorize solver operation"}}' \
+  | jq .
+
+# 3) Start ceremony
+curl -s -X POST "$GATEWAY/signing/ceremony/start" \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"'"$SESSION_ID"'"}' \
+  | jq .
+
+# 4) Poll status
+curl -s "$GATEWAY/signing/ceremony/$SESSION_ID/status" | jq .
+
+# 5) Finalization (example endpoint)
+curl -s -X POST "$GATEWAY/vtxos/settlement/process" | jq .
+```
+Notes:
+
+- Requires `jq`.
+- Assumes development helper endpoints are enabled.

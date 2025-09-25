@@ -10,8 +10,11 @@ from typing import Any, Dict
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-# Ensure we can import the SDK from the repo root when running this example standalone
+# Ensure we can import the SDK from the repo when running this example standalone
 REPO_ROOT = Path(__file__).resolve().parents[2]
+SDK_PY_ROOT = REPO_ROOT / "sdk-py"
+if str(SDK_PY_ROOT) not in sys.path:
+    sys.path.insert(0, str(SDK_PY_ROOT))
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 

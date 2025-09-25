@@ -10,12 +10,18 @@ npm install
 npm run build
 ```
 
+Local development note: when working inside this monorepo without publishing, you can import from the local source instead of the package name:
+
+```ts
+import { GatewayClient, computeEventId } from './src';
+```
+
 ## Usage
 
 ### HTTP Client
 
 ```ts
-import { GatewayClient } from './src';
+import { GatewayClient } from 'arkrelay-sdk-ts';
 
 const client = new GatewayClient('http://localhost:8000', {
   retry: { enabled: true, maxAttempts: 5, backoffBase: 200, backoffFactor: 2.0, jitter: 100 },
@@ -28,7 +34,7 @@ const status = await client.getCeremonyStatus(session.session_id);
 ### Nostr Utilities
 
 ```ts
-import { computeEventId, verifyEvent, hexToNpub, npubToHex } from './src';
+import { computeEventId, verifyEvent, hexToNpub, npubToHex } from 'arkrelay-sdk-ts';
 
 const expectedId = computeEventId(ev.pubkey, ev.created_at, ev.kind, ev.tags, ev.content);
 const { ok } = await verifyEvent(ev);
@@ -38,7 +44,7 @@ const { ok } = await verifyEvent(ev);
 
 ```tsx
 import { useEffect, useRef, useState } from 'react';
-import { GatewayClient } from './src';
+import { GatewayClient } from 'arkrelay-sdk-ts';
 
 type UseCeremonyOpts = { intervalMs?: number };
 
@@ -84,7 +90,7 @@ export function useCeremonyStatus(client: GatewayClient, sessionId: string | nul
 An optional JSON Schema validator is provided (mirrors Python's jsonschema usage).
 
 ```ts
-import { validate31510, validate31511, validate31512 } from './src/validation';
+import { validate31510, validate31511, validate31512 } from 'arkrelay-sdk-ts';
 
 const ok = validate31510(intent);
 ```

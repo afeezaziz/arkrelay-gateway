@@ -90,52 +90,13 @@ Sent by the gateway to the wallet via encrypted DM. Requests a precise signature
 
 Published by the wallet back to the gateway.
 
-- Content example:
 ```json
 {
   "session_id": "<session_id>",
   "type": "sign_ark_tx",
   "signature": "<wallet_signature_hex>",
   "payload_ref": "<hash or id of payload>"
-}
-```
-
----
-
-## Final Transaction and Notifications
-
-- 31340 — Final Transaction Confirmation (public):
-  - Tags: SHOULD `e`-tag the associated 31510 intent id(s). SHOULD `p`-tag recipients.
-  - Content: details of spent and created VTXOs and final transactions.
-- 31341 — Transaction Failure Notice (encrypted DM):
-  - Content: `{ "status": "failure", "code": <int>, "message": "..." }`
-- 31342 — L1 Commitment Notice (public):
-  - Content: `{ "l1_txid": "...", "block_height": 0, "merkle_root_of_l2_txs": "..." }`
-
----
-
-## Recommended Wallet Flow
-
-1) Prompt the user to approve a single high-level intent (31510). Sign with NIP-07.
-2) After the gateway acknowledges the intent, listen for encrypted DMs from the gateway (31511 challenges).
-3) For each challenge:
-   - Verify it matches the authorized session (`session_id`, `type`).
-   - Verify low-level data matches the high-level intent (amounts, asset, recipients).
-   - Automatically sign and reply with an encrypted DM (31512) without re-prompting the user.
-4) Monitor for final public confirmation (31340) or failure DM (31341).
-
----
-
-## JavaScript Example (Browser with NIP-07)
-
-```js
-// Assumes a NIP-07 provider is available as window.nostr
-const gatewayPubkey = "<gateway_npub_hex>"; // hex (not bech32)
-
-// 1) Get user identity
 const userPubKey = await window.nostr.getPublicKey();
-
-// 2) Build and sign 31510
 const intent = {
   kind: 31510,
   content: JSON.stringify({
