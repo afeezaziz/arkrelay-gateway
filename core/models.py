@@ -1,6 +1,5 @@
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Float, Boolean, ForeignKey, BigInteger, LargeBinary
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship, scoped_session
+from sqlalchemy.orm import declarative_base, sessionmaker, relationship, scoped_session
 from sqlalchemy.dialects.mysql import JSON
 from datetime import datetime, timezone
 import os
@@ -197,28 +196,50 @@ class LightningInvoice(Base):
 
     asset = relationship("Asset")
 
-# Database setup
-# Initialize a single global Engine and scoped session for the process
+# Database setup (lazy initialization so tests can patch create_engine)
 _config = Config()
-engine = create_engine(
-    _config.DATABASE_URL,
-    pool_size=_config.DB_POOL_SIZE,
-    max_overflow=_config.DB_POOL_MAX_OVERFLOW,
-    pool_timeout=_config.DB_POOL_TIMEOUT,
-    pool_recycle=1800,
-    pool_pre_ping=True,
-)
-SessionLocal = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
+engine = None  # type: ignore[assignment]
+SessionLocal = None  # type: ignore[assignment]
+
+def _init_engine(force: bool = False) -> None:
+    """Initialize the SQLAlchemy engine and session factory.
+
+    When force=True, always (re)create the engine/session. This is helpful for tests
+    that patch create_engine and expect failures to propagate from get_session().
+    """
+    global engine, SessionLocal
+    if not force and engine is not None and SessionLocal is not None:
+        return
+    url = _config.DATABASE_URL
+    # For SQLite (esp. in-memory), avoid pooling args which are invalid for SingletonThreadPool
+    if str(url).startswith("sqlite"):
+        engine = create_engine(
+            url,
+            connect_args={"check_same_thread": False},
+        )
+    else:
+        engine = create_engine(
+            url,
+            pool_size=_config.DB_POOL_SIZE,
+            max_overflow=_config.DB_POOL_MAX_OVERFLOW,
+            pool_timeout=_config.DB_POOL_TIMEOUT,
+            pool_recycle=1800,
+            pool_pre_ping=True,
+        )
+    SessionLocal = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
 
 def get_database_url():
     return _config.DATABASE_URL
 
 def create_tables():
-    Base.metadata.create_all(engine)
+    _init_engine()
+    Base.metadata.create_all(engine)  # type: ignore[arg-type]
     return engine
 
 def get_session():
-    return SessionLocal()
+    # Force re-init so that tests patching create_engine see the call on each invocation
+    _init_engine(force=True)
+    return SessionLocal()  # type: ignore[operator]
 
 # Expose a safe builtin alias for tests that call `get_session()` directly without import.
 # This wrapper resolves the current core.models.get_session at call time so pytest patches still apply.

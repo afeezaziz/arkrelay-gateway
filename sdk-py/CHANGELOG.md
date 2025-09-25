@@ -8,6 +8,14 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Add more typed models and schemas.
 - Provide optional OpenAPI-generated clients once the spec is enriched.
 
+## [0.1.1] - 2025-09-25
+### Changed
+- Python 3.9 compatibility: replaced PEP 604 unions with `Optional[...]` and added `NotRequired` fallback via `typing_extensions`.
+- Improved packaging/build verifications; local build+install import sanity now covered in CI and release workflow.
+
+### Fixed
+- Adjusted examples to import SDK from `sdk-py` path during local development.
+
 ## [0.1.0] - 2025-09-25
 ### Added
 - Initial Python SDK package (`arkrelay-sdk`).
@@ -21,5 +29,6 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Errors (`sdk.errors`): `VerificationError`, `SchemaValidationError`, `RetryExceededError`, `CeremonyTimeoutError`.
 - Packaging metadata and README with publish instructions.
 
-[Unreleased]: https://github.com/afeezaziz/arkrelay-gateway/compare/sdk-py-v0.1.0...HEAD
+[Unreleased]: https://github.com/afeezaziz/arkrelay-gateway/compare/sdk-py-v0.1.1...HEAD
+[0.1.1]: https://github.com/afeezaziz/arkrelay-gateway/compare/sdk-py-v0.1.0...sdk-py-v0.1.1
 [0.1.0]: https://github.com/afeezaziz/arkrelay-gateway/releases/tag/sdk-py-v0.1.0
