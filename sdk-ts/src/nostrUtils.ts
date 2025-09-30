@@ -1,4 +1,4 @@
-import { schnorr } from '@noble/secp256k1';
+import { verify, utils } from '@noble/secp256k1';
 import { sha256 } from '@noble/hashes/sha256';
 import { bech32 } from 'bech32';
 
@@ -48,7 +48,7 @@ export async function verifyEvent(event: NostrEvent): Promise<{ ok: boolean; idM
     const msg32 = hexToBytes(expectedId);
     const sig = hexToBytes(event.sig);
     const pubkeyXOnly = hexToBytes(event.pubkey);
-    signatureValid = await schnorr.verify(sig, msg32, pubkeyXOnly);
+    signatureValid = await verify(sig, msg32, pubkeyXOnly);
   } catch {
     signatureValid = false;
   }

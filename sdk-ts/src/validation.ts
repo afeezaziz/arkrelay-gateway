@@ -13,7 +13,7 @@ export interface Intent31510 {
   [key: string]: unknown;
 }
 
-const schema31510: JSONSchemaType<Intent31510> = {
+const schema31510 = {
   type: 'object',
   properties: {
     action_id: { type: 'string' },
@@ -51,7 +51,7 @@ export interface Response31512 {
   [key: string]: unknown;
 }
 
-const schema31512: JSONSchemaType<Response31512> = {
+const schema31512 = {
   type: 'object',
   properties: {
     session_id: { type: 'string' },
