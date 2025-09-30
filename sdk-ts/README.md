@@ -31,6 +31,26 @@ const session = await client.createSession('npub1...', 'protocol_op', { action_i
 const status = await client.getCeremonyStatus(session.session_id);
 ```
 
+### Lightning Operations (for Wallet Developers)
+
+```ts
+import { LightningOperations } from 'arkrelay-sdk-ts';
+
+const lightning = new LightningOperations('http://localhost:8000');
+const result = await lightning.executeLiftFlow(100000, 'gBTC');
+console.log(`Lift initiated: ${result.sessionId}`);
+```
+
+### VTXO Operations (for Solver Developers)
+
+```ts
+import { VtxoOperations } from 'arkrelay-sdk-ts';
+
+const vtxoOps = new VtxoOperations('http://localhost:8000');
+const result = await vtxoOps.executeMultiVtxoFlow('gUSD', 400000000, 'npub1recipient...');
+console.log(`Multi-VTXO flow: ${result.sessionId}`);
+```
+
 ### Nostr Utilities
 
 ```ts
@@ -94,6 +114,46 @@ import { validate31510, validate31511, validate31512 } from 'arkrelay-sdk-ts';
 
 const ok = validate31510(intent);
 ```
+
+## Examples and Documentation
+
+### Available Examples
+- **Lightning Operations**: Complete gBTC lift/land flows (`examples/lightning-operations.ts`)
+- **VTXO Operations**: Splitting, multi-VTXO transactions, optimal change (`examples/vtxo-operations.ts`)
+- **React Integration**: Live React app with ceremony polling (`examples/react-app/`)
+
+### Running Examples
+```bash
+# Build the SDK
+npm run build
+
+# Run React example
+cd examples/react-app
+npm install
+npm run dev
+
+# Import examples in your code
+import { LightningOperations, VtxoOperations } from 'arkrelay-sdk-ts';
+```
+
+### Documentation
+- [Examples Guide](examples/README.md) - Complete usage examples
+- [Nostr Event Flows](../../docs/examples/nostr_flows.md) - Complete event sequences
+- [Solver Integration Guide](../../docs/developers/solver-integration.md) - Solver development
+
+## Architecture Patterns
+
+### For Wallet Developers
+- Lightning lift/land operations
+- Service request patterns (31500/31501/31502)
+- Nostr event handling (31510/31511/31512)
+- React hooks for session monitoring
+
+### For Solver Developers
+- VTXO management (splitting, multi-VTXO transactions)
+- Protocol integration (lending, AMM, vaults)
+- Multi-protocol support
+- Error handling and recovery
 
 ## License
 

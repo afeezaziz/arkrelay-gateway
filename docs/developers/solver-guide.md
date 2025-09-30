@@ -31,6 +31,11 @@ See also:
 
 - **Integration layer**
   - Gateway client using minimal endpoints for sessions, challenges, and settlement (and optional Lightning rails).
+  - VTXO management with advanced features:
+    - Smart coin selection for optimal VTXO combinations
+    - Split functionality for breaking large VTXOs into smaller denominations
+    - Automatic change creation to preserve user funds
+    - Multi-VTXO transactions for amounts exceeding single VTXO capacity
   - Nostr publisher for correlation notices and ops messages.
 
 ### Bootstrapping checklist
@@ -44,6 +49,9 @@ See also:
    - `POST /sessions/{session_id}/challenge` with `payload_to_sign` and human-readable context.
    - `POST /signing/ceremony/start` and poll `GET /signing/ceremony/{session_id}/status` or listen for 31512 DMs.
 6. On success, request VTXO/tx finalization via `/vtxos/*` or transaction helpers.
+   - Use `/vtxos/assign` for optimal VTXO selection (single or multi-VTXO)
+   - Use `/vtxos/split` to split large VTXOs into smaller denominations
+   - Gateway automatically handles optimal change creation
 7. Watch for 31340 (success) or 31341 (failure); update solver DB and notify clients.
 
 ### Reference block diagram

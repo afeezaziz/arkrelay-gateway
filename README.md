@@ -79,6 +79,45 @@ Use these SDKs to integrate with the Gateway quickly:
   - Docs: see `sdk-ts/README.md`
   - Provides: `GatewayClient` (with optional retry), `nostrUtils` (computeEventId/verifyEvent/npub<->hex), `validation` (AJV schemas), and a React ceremony polling hook example under `sdk-ts/examples/react-app`.
 
+## VTXO Management
+
+The gateway provides advanced VTXO (Virtual Transaction Output) management capabilities:
+
+### Core Features
+- **Explicit VTXO Split Logic**: Split large VTXOs into smaller denominations for efficient payments
+- **Multi-VTXO Transactions**: Combine multiple VTXOs for larger transfers when single VTXO is insufficient
+- **Optimal Change Management**: Automatic creation of optimal change VTXOs to preserve user funds
+- **Smart Coin Selection**: Algorithms to find optimal VTXO combinations for any transfer amount
+- **Dust Optimization**: 1 satoshi dust limit for off-chain VTXOs (vs 546 sats for on-chain)
+
+### VTXO Operations
+- `POST /vtxos/split` - Split a VTXO into smaller denominations
+- `POST /vtxos/batch/create` - Create multiple VTXOs efficiently
+- `POST /vtxos/assign` - Assign optimal VTXO(s) to user for transfer
+- `POST /vtxos/settlement/process` - Process VTXO settlement
+- `GET /vtxos/user/<pubkey>` - List user's available VTXOs
+
+### Split Example
+Split a 5 BTC VTXO for a 2 BTC transfer:
+```bash
+curl -s -X POST :8000/vtxos/split -H 'Content-Type: application/json' -d '{
+  "vtxo_id": "vtxo_123",
+  "split_amounts": [200000000, 300000000],
+  "user_pubkey": "npub1..."
+}'
+```
+
+### Multi-VTXO Transfer
+When transferring 4 BTC with available 1 BTC + 3 BTC VTXOs:
+```bash
+curl -s -X POST :8000/vtxos/assign -H 'Content-Type: application/json' -d '{
+  "user_pubkey": "npub1...",
+  "asset_id": "BTC",
+  "amount_needed": 400000000
+}'
+# Gateway automatically finds and combines optimal VTXO combination
+```
+
 ## Installation
 
 ### Prerequisites

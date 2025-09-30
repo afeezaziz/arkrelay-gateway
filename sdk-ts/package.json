@@ -1,17 +1,25 @@
 {
-  "name": "arkrelay-sdk-ts",
+  "name": "arkrelay-sdk",
   "version": "0.1.0",
   "description": "TypeScript SDK for ArkRelay Gateway (sessions, ceremony, assets, and Nostr utilities)",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist",
+    "examples",
+    "README.md",
+    "src"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
-    "version:bump:patch": "node -e \"const fs=require('fs');const pkg=JSON.parse(fs.readFileSync('package.json'));const [a,b,c]=pkg.version.split('.').map(Number);pkg.version=[a,b,c+1].join('.');fs.writeFileSync('package.json',JSON.stringify(pkg,null,2)+'\n');console.log('New version',pkg.version);\""
+    "build:examples": "tsc -p examples/tsconfig.json",
+    "version:bump:patch": "node -e \"const fs=require('fs');const pkg=JSON.parse(fs.readFileSync('package.json'));const [a,b,c]=pkg.version.split('.').map(Number);pkg.version=[a,b,c+1].join('.');fs.writeFileSync('package.json',JSON.stringify(pkg,null,2)+'\n');console.log('New version',pkg.version);\"",
+    "publish:dry": "npm pack --dry-run",
+    "publish:test": "npm publish --access public --dry-run"
   },
   "dependencies": {
     "@noble/secp256k1": "2.1.0",

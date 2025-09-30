@@ -151,6 +151,7 @@ class VtxoManager:
         self.inventory_monitor = VtxoInventoryMonitor()
         self.default_vtxo_amount = 100000  # 100k sats default VTXO size
         self.vtxo_expiry_hours = 24  # VTXOs expire after 24 hours
+        self.dust_limit_sats = 1  # VTXOs are off-chain, so dust limit is 1 satoshi
 
     def start_services(self):
         """Start all VTXO management services"""

@@ -55,6 +55,9 @@ Gateway design principle: keep the gateway thin. The gateway manages signing ses
    - POST /sessions/{session_id}/challenge including `payload_to_sign` and UX context.
    - POST /signing/ceremony/start and poll GET /signing/ceremony/{session_id}/status or listen for 31512 DMs.
 6) On success, request VTXO/tx finalization (/vtxos/* or transaction helpers as needed).
+   - Use `/vtxos/assign` for optimal VTXO selection (supports single and multi-VTXO transactions)
+   - Use `/vtxos/split` to split large VTXOs when needed for specific denominations
+   - Gateway automatically handles optimal change VTXO creation
 7) Watch for 31340 (success) or 31341 (failure); update solver DB and notify clients.
 
 ### Minimal reference implementation
