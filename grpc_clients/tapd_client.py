@@ -8,6 +8,7 @@ and proof validation capabilities.
 import grpc
 import sys
 import logging
+import uuid
 from typing import Optional, Dict, Any, List, Union
 from dataclasses import dataclass
 from datetime import datetime
@@ -429,3 +430,167 @@ class TapdClient(GrpcClientBase):
             expiry=0,
             created_at=datetime.now()
         )
+
+    # RGB-specific methods
+
+    def validate_rgb_contract(self, contract_id: str, genesis_proof: str) -> bool:
+        """Validate RGB contract genesis proof"""
+        try:
+            # Note: Replace with actual TAPD RGB validation call
+            # request = tapd_pb2.ValidateRGBContractRequest(
+            #     contract_id=contract_id,
+            #     genesis_proof=genesis_proof
+            # )
+            # response = self._execute_with_retry(self.stub.ValidateRGBContract, request)
+            # return response.is_valid
+
+            # Placeholder implementation
+            logger.info(f"Validating RGB contract {contract_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to validate RGB contract: {e}")
+            return False
+
+    def create_rgb_allocation(self, contract_id: str, asset_id: str,
+                           amount: int, owner_script: bytes) -> Optional[str]:
+        """Create RGB allocation for an asset"""
+        try:
+            # Note: Replace with actual TAPD RGB allocation call
+            # request = tapd_pb2.CreateRGBAllocationRequest(
+            #     contract_id=contract_id,
+            #     asset_id=asset_id,
+            #     amount=amount,
+            #     owner_script=owner_script
+            # )
+            # response = self._execute_with_retry(self.stub.CreateRGBAllocation, request)
+            # return response.allocation_id
+
+            # Placeholder implementation
+            logger.info(f"Creating RGB allocation for contract {contract_id}, asset {asset_id}")
+            return f"rgb_allocation_{uuid.uuid4().hex}"
+        except Exception as e:
+            logger.error(f"Failed to create RGB allocation: {e}")
+            return None
+
+    def verify_rgb_proof(self, proof_data: str, contract_id: str) -> bool:
+        """Verify RGB proof data"""
+        try:
+            # Note: Replace with actual TAPD RGB proof verification call
+            # request = tapd_pb2.VerifyRGBProofRequest(
+            #     proof_data=proof_data,
+            #     contract_id=contract_id
+            # )
+            # response = self._execute_with_retry(self.stub.VerifyRGBProof, request)
+            # return response.is_valid
+
+            # Placeholder implementation
+            logger.info(f"Verifying RGB proof for contract {contract_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to verify RGB proof: {e}")
+            return False
+
+    def get_rgb_contract_state(self, contract_id: str) -> Optional[Dict[str, Any]]:
+        """Get current RGB contract state"""
+        try:
+            # Note: Replace with actual TAPD RGB state query call
+            # request = tapd_pb2.GetRGBContractStateRequest(contract_id=contract_id)
+            # response = self._execute_with_retry(self.stub.GetRGBContractState, request)
+            # return {
+            #     'state_root': response.state_root,
+            #     'allocations': response.allocations,
+            #     'transitions': response.transitions
+            # }
+
+            # Placeholder implementation
+            logger.info(f"Getting RGB contract state for {contract_id}")
+            return {
+                'state_root': f"state_root_{contract_id}",
+                'allocations': [],
+                'transitions': []
+            }
+        except Exception as e:
+            logger.error(f"Failed to get RGB contract state: {e}")
+            return None
+
+    def create_rgb_transition(self, contract_id: str, inputs: List[Dict],
+                            outputs: List[Dict]) -> Optional[str]:
+        """Create RGB state transition"""
+        try:
+            # Note: Replace with actual TAPD RGB transition call
+            # request = tapd_pb2.CreateRGBTransitionRequest(
+            #     contract_id=contract_id,
+            #     inputs=[tapd_pb2.RGBInput(**inp) for inp in inputs],
+            #     outputs=[tapd_pb2.RGBOutput(**out) for out in outputs]
+            # )
+            # response = self._execute_with_retry(self.stub.CreateRGBTransition, request)
+            # return response.transition_id
+
+            # Placeholder implementation
+            logger.info(f"Creating RGB transition for contract {contract_id}")
+            return f"rgb_transition_{uuid.uuid4().hex}"
+        except Exception as e:
+            logger.error(f"Failed to create RGB transition: {e}")
+            return None
+
+    def get_rgb_allocations(self, contract_id: str = None,
+                          owner_pubkey: str = None) -> List[Dict[str, Any]]:
+        """Get RGB allocations, optionally filtered"""
+        try:
+            # Note: Replace with actual TAPD RGB allocations query call
+            # request = tapd_pb2.GetRGBAllocationsRequest(
+            #     contract_id=contract_id,
+            #     owner_pubkey=owner_pubkey
+            # )
+            # response = self._execute_with_retry(self.stub.GetRGBAllocations, request)
+            # return [
+            #     {
+            #         'allocation_id': alloc.allocation_id,
+            #         'contract_id': alloc.contract_id,
+            #         'asset_id': alloc.asset_id,
+            #         'amount': alloc.amount,
+            #         'owner_pubkey': alloc.owner_pubkey,
+            #         'state_commitment': alloc.state_commitment
+            #     }
+            #     for alloc in response.allocations
+            # ]
+
+            # Placeholder implementation
+            logger.info(f"Getting RGB allocations for contract {contract_id}, owner {owner_pubkey}")
+            return []
+        except Exception as e:
+            logger.error(f"Failed to get RGB allocations: {e}")
+            return []
+
+    def import_rgb_proof(self, proof_data: str) -> bool:
+        """Import RGB proof data"""
+        try:
+            # Note: Replace with actual TAPD RGB proof import call
+            # request = tapd_pb2.ImportRGBProofRequest(proof_data=proof_data)
+            # response = self._execute_with_retry(self.stub.ImportRGBProof, request)
+            # return response.success
+
+            # Placeholder implementation
+            logger.info("Importing RGB proof")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to import RGB proof: {e}")
+            return False
+
+    def export_rgb_proof(self, contract_id: str, allocation_id: str) -> Optional[str]:
+        """Export RGB proof for allocation"""
+        try:
+            # Note: Replace with actual TAPD RGB proof export call
+            # request = tapd_pb2.ExportRGBProofRequest(
+            #     contract_id=contract_id,
+            #     allocation_id=allocation_id
+            # )
+            # response = self._execute_with_retry(self.stub.ExportRGBProof, request)
+            # return response.proof_data
+
+            # Placeholder implementation
+            logger.info(f"Exporting RGB proof for allocation {allocation_id}")
+            return f"rgb_proof_{allocation_id}"
+        except Exception as e:
+            logger.error(f"Failed to export RGB proof: {e}")
+            return None

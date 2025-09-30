@@ -62,6 +62,13 @@ class Vtxo(Base):
     expires_at = Column(DateTime, nullable=False)
     spending_txid = Column(String(64), nullable=True)
 
+    # RGB-specific fields
+    rgb_asset_type = Column(String(20), nullable=True)  # RGB asset type (CFA, NIA)
+    rgb_proof_data = Column(Text, nullable=True)  # RGB-specific proof data
+    rgb_state_commitment = Column(LargeBinary, nullable=True)  # RGB state commitment
+    rgb_contract_state = Column(JSON, nullable=True)  # RGB contract state data
+    rgb_allocation_id = Column(String(64), nullable=True)  # RGB allocation identifier
+
     asset = relationship("Asset", back_populates="vtxos")
 
 class Asset(Base):
@@ -71,12 +78,20 @@ class Asset(Base):
     asset_id = Column(String(64), unique=True, nullable=False)
     name = Column(String(100), nullable=False)
     ticker = Column(String(10), nullable=False)
-    asset_type = Column(String(20), default='normal')  # normal, collectible
+    asset_type = Column(String(20), default='normal')  # normal, collectible, rgb_contract
     decimal_places = Column(Integer, default=8)
     total_supply = Column(BigInteger, default=0)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=utc_now)
     asset_metadata = Column('metadata', JSON, nullable=True)  # Additional asset metadata
+
+    # RGB-specific fields
+    rgb_contract_id = Column(String(64), nullable=True)  # RGB contract identifier
+    rgb_schema_type = Column(String(50), nullable=True)  # RGB schema type (e.g., CFA, NIA)
+    rgb_genesis_proof = Column(Text, nullable=True)  # RGB genesis proof data
+    rgb_interface_id = Column(String(64), nullable=True)  # RGB interface identifier
+    rgb_specification_id = Column(String(64), nullable=True)  # RGB specification ID
+    is_rgb_enabled = Column(Boolean, default=False)  # Whether RGB features are enabled
 
     vtxos = relationship("Vtxo", back_populates="asset")
     balances = relationship("AssetBalance", back_populates="asset")
@@ -195,6 +210,52 @@ class LightningInvoice(Base):
     preimage = Column(String(64), nullable=True)
 
     asset = relationship("Asset")
+
+class RGBContract(Base):
+    __tablename__ = 'rgb_contracts'
+
+    id = Column(Integer, primary_key=True)
+    contract_id = Column(String(64), unique=True, nullable=False)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    interface_id = Column(String(64), nullable=False)
+    specification_id = Column(String(64), nullable=False)
+    genesis_proof = Column(Text, nullable=False)
+    schema_type = Column(String(50), nullable=False)  # CFA, NIA, etc.
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+
+    # RGB contract metadata
+    metadata = Column(JSON, nullable=True)
+    creator_pubkey = Column(String(66), nullable=True)
+    total_issued = Column(BigInteger, default=0)
+
+    # Contract state
+    current_state_root = Column(String(64), nullable=True)
+    last_transition_txid = Column(String(64), nullable=True)
+
+class RGBAllocation(Base):
+    __tablename__ = 'rgb_allocations'
+
+    id = Column(Integer, primary_key=True)
+    allocation_id = Column(String(64), unique=True, nullable=False)
+    contract_id = Column(String(64), ForeignKey('rgb_contracts.contract_id'), nullable=False)
+    vtxo_id = Column(String(64), ForeignKey('vtxos.vtxo_id'), nullable=False)
+    owner_pubkey = Column(String(66), nullable=False)
+    amount = Column(BigInteger, nullable=False)
+    created_at = Column(DateTime, default=utc_now)
+
+    # RGB-specific data
+    state_commitment = Column(LargeBinary, nullable=True)
+    proof_data = Column(Text, nullable=True)
+    seal_type = Column(String(20), default='tapret_first')  # RGB seal type
+    is_spent = Column(Boolean, default=False)
+    spent_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    contract = relationship("RGBContract")
+    vtxo = relationship("Vtxo")
 
 # Database setup (lazy initialization so tests can patch create_engine)
 _config = Config()

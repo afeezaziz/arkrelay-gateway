@@ -18,19 +18,25 @@ jobs:
 
       - name: Install dependencies
         run: |
+          cd sdk-py
           python -m pip install --upgrade pip
           pip install build twine pytest
 
       - name: Run tests
         run: |
+          cd sdk-py
           # Add your test commands here
           echo "Running tests..."
 
       - name: Build package
-        run: python -m build
+        run: |
+          cd sdk-py
+          python -m build
 
       - name: Check package
-        run: twine check dist/*
+        run: |
+          cd sdk-py
+          twine check dist/*
 
   publish:
     needs: test
@@ -47,17 +53,22 @@ jobs:
 
       - name: Install build dependencies
         run: |
+          cd sdk-py
           python -m pip install --upgrade pip
           pip install build twine
 
       - name: Build package
-        run: python -m build
+        run: |
+          cd sdk-py
+          python -m build
 
       - name: Publish to PyPI
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload dist/*
+        run: |
+          cd sdk-py
+          twine upload dist/*
 
       - name: Create GitHub Release
         uses: actions/create-release@v1

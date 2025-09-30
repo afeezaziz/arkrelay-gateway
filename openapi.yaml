@@ -98,10 +98,621 @@ paths:
         '503': { description: ARKD client unavailable }
   /grpc/tapd/balances:
     get:
-      summary: TAPD asset balances
+      summary: Get Taproot Asset balances
       responses:
         '200': { description: OK }
         '503': { description: TAPD client unavailable }
+  /rgb/health:
+    get:
+      summary: RGB service health check
+      responses:
+        '200':
+          description: RGB service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  timestamp:
+                    type: string
+                  contracts_count:
+                    type: integer
+                  allocations_count:
+                    type: integer
+        '503':
+          description: RGB service is unhealthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  error:
+                    type: string
+  /rgb/contracts:
+    get:
+      summary: List all RGB contracts
+      parameters:
+        - name: active_only
+          in: query
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: List of RGB contracts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RGBContract'
+                  count:
+                    type: integer
+        '500': { description: Internal server error }
+    post:
+      summary: Register a new RGB contract
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RGBContractRegistration'
+      responses:
+        '201':
+          description: RGB contract registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/RGBContract'
+                  message:
+                    type: string
+        '400': { description: Bad request }
+        '409': { description: Contract already exists }
+        '500': { description: Internal server error }
+  /rgb/contracts/{contract_id}:
+    get:
+      summary: Get RGB contract information
+      parameters:
+        - name: contract_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: RGB contract details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/RGBContract'
+        '404': { description: Contract not found }
+        '500': { description: Internal server error }
+  /rgb/allocations:
+    get:
+      summary: Get RGB allocations with optional filtering
+      parameters:
+        - name: owner_pubkey
+          in: query
+          schema:
+            type: string
+        - name: contract_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of RGB allocations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RGBAllocation'
+                  count:
+                    type: integer
+        '400': { description: Bad request }
+        '500': { description: Internal server error }
+    post:
+      summary: Create a new RGB allocation within a VTXO
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RGBAllocationCreation'
+      responses:
+        '201':
+          description: RGB allocation created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/RGBAllocation'
+                  message:
+                    type: string
+        '400': { description: Bad request }
+        '409': { description: Allocation conflict }
+        '500': { description: Internal server error }
+  /rgb/allocations/transfer:
+    post:
+      summary: Transfer RGB allocation from one user to another
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RGBAllocationTransfer'
+      responses:
+        '200':
+          description: RGB allocation transferred successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/RGBAllocationTransferResult'
+                  message:
+                    type: string
+        '400': { description: Bad request }
+        '500': { description: Internal server error }
+  /rgb/vtxos/create:
+    post:
+      summary: Create a VTXO specifically for RGB allocations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RGBVTXOCreation'
+      responses:
+        '201':
+          description: RGB VTXO created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/RGBVTXO'
+                  message:
+                    type: string
+        '400': { description: Bad request }
+        '500': { description: Internal server error }
+  /rgb/vtxos/{vtxo_id}/split:
+    post:
+      summary: Split an RGB VTXO into multiple VTXOs with corresponding allocations
+      parameters:
+        - name: vtxo_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RGBVTXOSplit'
+      responses:
+        '200':
+          description: RGB VTXO split successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400': { description: Bad request }
+        '500': { description: Internal server error }
+  /rgb/vtxos/user/{user_pubkey}:
+    get:
+      summary: Get all RGB VTXOs for a user, optionally filtered by contract
+      parameters:
+        - name: user_pubkey
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: contract_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of RGB VTXOs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RGBVTXO'
+                  count:
+                    type: integer
+        '500': { description: Internal server error }
+  /rgb/vtxos/{vtxo_id}/validate:
+    get:
+      summary: Validate the RGB state of a VTXO
+      parameters:
+        - name: vtxo_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: RGB VTXO validation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/RGBVTXOValidation'
+        '500': { description: Internal server error }
+  /rgb/proofs/validate:
+    post:
+      summary: Validate RGB proof data against contract
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RGBProofValidation'
+      responses:
+        '200':
+          description: RGB proof validation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/RGBProofValidationResult'
+                  message:
+                    type: string
+        '400': { description: Bad request }
+        '500': { description: Internal server error }
+  /rgb/stats:
+    get:
+      summary: Get RGB system statistics
+      responses:
+        '200':
+          description: RGB system statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/RGBStats'
+        '500': { description: Internal server error }
+components:
+  schemas:
+    RGBContract:
+      type: object
+      properties:
+        contract_id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        interface_id:
+          type: string
+        specification_id:
+          type: string
+        schema_type:
+          type: string
+        genesis_proof:
+          type: string
+        metadata:
+          type: object
+        creator_pubkey:
+          type: string
+        total_issued:
+          type: integer
+        current_state_root:
+          type: string
+        last_transition_txid:
+          type: string
+        asset_id:
+          type: string
+        asset_ticker:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    RGBContractRegistration:
+      type: object
+      required:
+        - contract_id
+        - name
+        - interface_id
+        - specification_id
+        - genesis_proof
+        - schema_type
+      properties:
+        contract_id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        interface_id:
+          type: string
+        specification_id:
+          type: string
+        genesis_proof:
+          type: string
+        schema_type:
+          type: string
+          enum: [cfa, nia, ria, uda]
+        metadata:
+          type: object
+        creator_pubkey:
+          type: string
+        ticker:
+          type: string
+    RGBAllocation:
+      type: object
+      properties:
+        allocation_id:
+          type: string
+        contract_id:
+          type: string
+        vtxo_id:
+          type: string
+        owner_pubkey:
+          type: string
+        amount:
+          type: integer
+        seal_type:
+          type: string
+        is_spent:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+    RGBAllocationCreation:
+      type: object
+      required:
+        - contract_id
+        - vtxo_id
+        - owner_pubkey
+        - amount
+      properties:
+        contract_id:
+          type: string
+        vtxo_id:
+          type: string
+        owner_pubkey:
+          type: string
+        amount:
+          type: integer
+        state_commitment:
+          type: string
+          format: byte
+        proof_data:
+          type: string
+        seal_type:
+          type: string
+          default: tapret_first
+    RGBAllocationTransfer:
+      type: object
+      required:
+        - from_pubkey
+        - to_pubkey
+        - allocation_id
+      properties:
+        from_pubkey:
+          type: string
+        to_pubkey:
+          type: string
+        allocation_id:
+          type: string
+        amount:
+          type: integer
+    RGBAllocationTransferResult:
+      type: object
+      properties:
+        from_allocation_id:
+          type: string
+        to_allocation_id:
+          type: string
+        contract_id:
+          type: string
+        amount:
+          type: integer
+        from_pubkey:
+          type: string
+        to_pubkey:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+    RGBVTXO:
+      type: object
+      properties:
+        vtxo_id:
+          type: string
+        txid:
+          type: string
+        vout:
+          type: integer
+        amount_sats:
+          type: integer
+        asset_id:
+          type: string
+        rgb_asset_type:
+          type: string
+        rgb_allocation_id:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+    RGBVTXOCreation:
+      type: object
+      required:
+        - user_pubkey
+        - asset_id
+        - amount_sats
+        - rgb_contract_id
+      properties:
+        user_pubkey:
+          type: string
+        asset_id:
+          type: string
+        amount_sats:
+          type: integer
+        rgb_contract_id:
+          type: string
+        rgb_allocation_data:
+          type: object
+    RGBVTXOSplit:
+      type: object
+      required:
+        - split_amounts
+      properties:
+        split_amounts:
+          type: array
+          items:
+            type: integer
+        rgb_allocation_splits:
+          type: array
+          items:
+            type: object
+    RGBVTXOValidation:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        vtxo_id:
+          type: string
+        contract_id:
+          type: string
+        amount:
+          type: integer
+        rgb_asset_type:
+          type: string
+        proof_valid:
+          type: boolean
+        state_consistent:
+          type: boolean
+        allocation_id:
+          type: string
+        owner_pubkey:
+          type: string
+        error:
+          type: string
+    RGBProofValidation:
+      type: object
+      required:
+        - proof_data
+        - contract_id
+      properties:
+        proof_data:
+          type: string
+        contract_id:
+          type: string
+    RGBProofValidationResult:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        contract_id:
+          type: string
+    RGBStats:
+      type: object
+      properties:
+        contracts:
+          type: object
+          properties:
+            total:
+              type: integer
+            active:
+              type: integer
+            inactive:
+              type: integer
+        allocations:
+          type: object
+          properties:
+            total:
+              type: integer
+            active:
+              type: integer
+            spent:
+              type: integer
+            total_value:
+              type: integer
+        schema_breakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              schema_type:
+                type: string
+              contract_count:
+                type: integer
+              total_issued:
+                type: integer
+        timestamp:
+          type: string
+          format: date-time
   /grpc/lnd/balances:
     get:
       summary: LND balances

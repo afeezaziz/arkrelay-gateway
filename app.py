@@ -27,11 +27,13 @@ from core.vtxo_manager import get_vtxo_manager, get_settlement_manager, initiali
 from core.monitoring import get_monitoring_system, initialize_monitoring, shutdown_monitoring
 from core.admin_api import admin_bp
 from core.cache_manager import initialize_performance_systems, shutdown_performance_systems, get_cache_manager
+from core.rgb_api import rgb_bp
 
 app = Flask(__name__)
 
-# Register admin blueprint
+# Register blueprints
 app.register_blueprint(admin_bp)
+app.register_blueprint(rgb_bp)
 
 # Initialize Lightning services
 lightning_manager = None

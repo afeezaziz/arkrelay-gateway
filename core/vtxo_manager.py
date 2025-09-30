@@ -16,9 +16,10 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional, Tuple
 from sqlalchemy import func, and_, or_
-from core.models import Vtxo, Asset, AssetBalance, Transaction, SigningSession, get_session
+from core.models import Vtxo, Asset, AssetBalance, Transaction, SigningSession, RGBAllocation, get_session
 from grpc_clients import get_grpc_manager, ServiceType
 from core.asset_manager import get_asset_manager
+from core.rgb_manager import get_rgb_manager
 
 logger = logging.getLogger(__name__)
 
@@ -338,6 +339,293 @@ class VtxoManager:
             return 0
         finally:
             session.close()
+
+    # RGB-specific VTXO operations
+
+    def create_rgb_vtxo(self, user_pubkey: str, asset_id: str, amount_sats: int,
+                       rgb_contract_id: str, rgb_allocation_data: Dict = None) -> Optional[Vtxo]:
+        """
+        Create a VTXO specifically for RGB allocations
+
+        Args:
+            user_pubkey: User's public key
+            asset_id: Asset ID
+            amount_sats: Amount in satoshis
+            rgb_contract_id: RGB contract ID
+            rgb_allocation_data: Optional RGB allocation data
+
+        Returns:
+            Created VTXO or None if failed
+        """
+        session = get_session()
+        try:
+            # Validate RGB contract exists
+            rgb_manager = get_rgb_manager()
+            contract = rgb_manager.get_rgb_contract(rgb_contract_id)
+            if not contract:
+                logger.error(f"RGB contract {rgb_contract_id} not found")
+                return None
+
+            # Create the VTXO
+            vtxo = self.assign_vtxo_to_user(user_pubkey, asset_id, amount_sats)
+            if not vtxo:
+                logger.error(f"Failed to assign VTXO for RGB allocation")
+                return None
+
+            # Update VTXO with RGB information
+            vtxo.rgb_asset_type = contract['schema_type']
+            vtxo.rgb_contract_state = rgb_allocation_data or {}
+
+            session.commit()
+
+            # Create RGB allocation
+            allocation_data = {
+                'contract_id': rgb_contract_id,
+                'vtxo_id': vtxo.vtxo_id,
+                'owner_pubkey': user_pubkey,
+                'amount': amount_sats,
+                'state_commitment': vtxo.rgb_state_commitment,
+                'proof_data': vtxo.rgb_proof_data
+            }
+
+            allocation = rgb_manager.create_rgb_allocation(allocation_data)
+            if allocation:
+                logger.info(f"✅ Created RGB VTXO {vtxo.vtxo_id} for contract {rgb_contract_id}")
+                return vtxo
+            else:
+                logger.error(f"Failed to create RGB allocation for VTXO {vtxo.vtxo_id}")
+                return None
+
+        except Exception as e:
+            session.rollback()
+            logger.error(f"❌ Failed to create RGB VTXO: {e}")
+            return None
+        finally:
+            session.close()
+
+    def split_rgb_vtxo(self, vtxo_id: str, split_amounts: List[int],
+                      rgb_allocation_splits: List[Dict] = None) -> bool:
+        """
+        Split an RGB VTXO into multiple VTXOs with corresponding allocations
+
+        Args:
+            vtxo_id: VTXO ID to split
+            split_amounts: List of amounts for each split
+            rgb_allocation_splits: List of RGB allocation data for each split
+
+        Returns:
+            True if successful, False otherwise
+        """
+        session = get_session()
+        try:
+            # Get the original VTXO
+            vtxo = session.query(Vtxo).filter_by(vtxo_id=vtxo_id).first()
+            if not vtxo or vtxo.status != 'assigned':
+                logger.error(f"VTXO {vtxo_id} not found or not assigned")
+                return False
+
+            # Validate RGB allocation data
+            if rgb_allocation_splits and len(rgb_allocation_splits) != len(split_amounts):
+                logger.error("RGB allocation splits must match split amounts")
+                return False
+
+            # Perform the split using existing VTXO logic
+            split_result = self._perform_vtxo_split(vtxo, split_amounts)
+            if not split_result:
+                logger.error(f"Failed to split VTXO {vtxo_id}")
+                return False
+
+            # Create RGB allocations for each new VTXO
+            if rgb_allocation_splits and vtxo.rgb_allocation_id:
+                rgb_manager = get_rgb_manager()
+                for i, (new_vtxo_id, allocation_data) in enumerate(zip(split_result['new_vtxo_ids'], rgb_allocation_splits)):
+                    allocation_data.update({
+                        'vtxo_id': new_vtxo_id,
+                        'contract_id': allocation_data.get('contract_id'),
+                        'owner_pubkey': vtxo.user_pubkey,
+                        'amount': split_amounts[i]
+                    })
+
+                    try:
+                        rgb_manager.create_rgb_allocation(allocation_data)
+                    except Exception as e:
+                        logger.error(f"Failed to create RGB allocation for split VTXO {new_vtxo_id}: {e}")
+                        return False
+
+            # Mark original VTXO as spent
+            vtxo.status = 'spent'
+            session.commit()
+
+            logger.info(f"✅ Split RGB VTXO {vtxo_id} into {len(split_amounts)} VTXOs")
+            return True
+
+        except Exception as e:
+            session.rollback()
+            logger.error(f"❌ Failed to split RGB VTXO: {e}")
+            return False
+        finally:
+            session.close()
+
+    def get_user_rgb_vtxos(self, user_pubkey: str, contract_id: str = None) -> List[Vtxo]:
+        """
+        Get all RGB VTXOs for a user, optionally filtered by contract
+
+        Args:
+            user_pubkey: User's public key
+            contract_id: Optional RGB contract ID filter
+
+        Returns:
+            List of RGB VTXOs
+        """
+        session = get_session()
+        try:
+            query = session.query(Vtxo).filter(
+                and_(
+                    Vtxo.user_pubkey == user_pubkey,
+                    Vtxo.rgb_asset_type.isnot(None),
+                    Vtxo.status == 'assigned'
+                )
+            )
+
+            if contract_id:
+                # Join with RGB allocation to filter by contract
+                query = query.join(RGBAllocation).filter(
+                    RGBAllocation.contract_id == contract_id,
+                    RGBAllocation.is_spent == False
+                )
+
+            vtxos = query.order_by(Vtxo.created_at.desc()).all()
+            return vtxos
+
+        except Exception as e:
+            logger.error(f"❌ Failed to get user RGB VTXOs: {e}")
+            return []
+        finally:
+            session.close()
+
+    def validate_rgb_vtxo_state(self, vtxo_id: str) -> Dict[str, Any]:
+        """
+        Validate the RGB state of a VTXO
+
+        Args:
+            vtxo_id: VTXO ID to validate
+
+        Returns:
+            Validation result with details
+        """
+        session = get_session()
+        try:
+            # Get the VTXO
+            vtxo = session.query(Vtxo).filter_by(vtxo_id=vtxo_id).first()
+            if not vtxo:
+                return {'error': 'VTXO not found', 'valid': False}
+
+            if not vtxo.rgb_asset_type:
+                return {'error': 'VTXO is not RGB-enabled', 'valid': False}
+
+            # Get RGB allocation
+            allocation = session.query(RGBAllocation).filter_by(
+                vtxo_id=vtxo_id, is_spent=False
+            ).first()
+
+            if not allocation:
+                return {'error': 'RGB allocation not found', 'valid': False}
+
+            # Validate RGB proof if present
+            proof_valid = True
+            if vtxo.rgb_proof_data:
+                rgb_manager = get_rgb_manager()
+                proof_valid = rgb_manager.validate_rgb_proof(vtxo.rgb_proof_data, allocation.contract_id)
+
+            # Check state consistency
+            state_consistent = True
+            if vtxo.rgb_state_commitment and allocation.state_commitment:
+                state_consistent = vtxo.rgb_state_commitment == allocation.state_commitment
+
+            return {
+                'valid': proof_valid and state_consistent,
+                'vtxo_id': vtxo_id,
+                'contract_id': allocation.contract_id,
+                'amount': allocation.amount,
+                'rgb_asset_type': vtxo.rgb_asset_type,
+                'proof_valid': proof_valid,
+                'state_consistent': state_consistent,
+                'allocation_id': allocation.allocation_id,
+                'owner_pubkey': allocation.owner_pubkey
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Failed to validate RGB VTXO state: {e}")
+            return {'error': str(e), 'valid': False}
+        finally:
+            session.close()
+
+    def _perform_vtxo_split(self, vtxo: Vtxo, split_amounts: List[int]) -> Optional[Dict]:
+        """
+        Internal method to perform the actual VTXO split
+
+        Args:
+            vtxo: VTXO to split
+            split_amounts: Amounts for each split
+
+        Returns:
+            Split result with new VTXO IDs
+        """
+        try:
+            # Validate split amounts
+            total_split = sum(split_amounts)
+            if total_split > vtxo.amount_sats:
+                logger.error(f"Split amounts ({total_split}) exceed VTXO amount ({vtxo.amount_sats})")
+                return None
+
+            # Create new VTXOs
+            new_vtxo_ids = []
+            for i, amount in enumerate(split_amounts):
+                new_vtxo = Vtxo(
+                    vtxo_id=f"{vtxo.vtxo_id}_split_{i}",
+                    txid=vtxo.txid,
+                    vout=vtxo.vout + i,  # Simulate new vout
+                    amount_sats=amount,
+                    script_pubkey=vtxo.script_pubkey,
+                    asset_id=vtxo.asset_id,
+                    user_pubkey=vtxo.user_pubkey,
+                    status='available',
+                    expires_at=vtxo.expires_at,
+                    rgb_asset_type=vtxo.rgb_asset_type
+                )
+                session = get_session()
+                session.add(new_vtxo)
+                new_vtxo_ids.append(new_vtxo.vtxo_id)
+                session.commit()
+
+            # Create change VTXO if needed
+            change_amount = vtxo.amount_sats - total_split
+            if change_amount > 0:
+                change_vtxo = Vtxo(
+                    vtxo_id=f"{vtxo.vtxo_id}_change",
+                    txid=vtxo.txid,
+                    vout=vtxo.vout + len(split_amounts),
+                    amount_sats=change_amount,
+                    script_pubkey=vtxo.script_pubkey,
+                    asset_id=vtxo.asset_id,
+                    user_pubkey=vtxo.user_pubkey,
+                    status='available',
+                    expires_at=vtxo.expires_at,
+                    rgb_asset_type=vtxo.rgb_asset_type
+                )
+                session = get_session()
+                session.add(change_vtxo)
+                session.commit()
+
+            return {
+                'new_vtxo_ids': new_vtxo_ids,
+                'change_amount': change_amount,
+                'total_split': total_split
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Failed to perform VTXO split: {e}")
+            return None
 
 
 class VtxoSettlementManager:

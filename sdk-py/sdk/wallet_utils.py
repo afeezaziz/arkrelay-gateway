@@ -13,7 +13,24 @@ import time
 from typing import Any, Dict, Tuple, Optional
 
 from coincurve import PrivateKey as CCPrivateKey  # type: ignore
-from coincurve.schnorr import schnorr_sign, schnorr_verify  # type: ignore
+
+# For schnorr signatures, we'll use a fallback implementation
+# Note: In a production environment, you might want to use a dedicated schnorr library
+try:
+    from coincurve.schnorr import schnorr_sign, schnorr_verify  # type: ignore
+except ImportError:
+    # Fallback implementation for schnorr signing/verification
+    def schnorr_sign(message: bytes, secret_key: bytes) -> bytes:
+        """Fallback schnorr sign implementation"""
+        # This is a placeholder - you should implement proper schnorr signing
+        # or use a library like `secp256k1-py` for production
+        raise NotImplementedError("Schnorr signing not available with current coincurve version")
+
+    def schnorr_verify(signature: bytes, message: bytes, public_key: bytes) -> bool:
+        """Fallback schnorr verify implementation"""
+        # This is a placeholder - you should implement proper schnorr verification
+        # or use a library like `secp256k1-py` for production
+        raise NotImplementedError("Schnorr verification not available with current coincurve version")
 
 from .nostr_utils import compute_event_id, verify_event, hex_to_npub  # re-export convenience
 
